@@ -4,6 +4,7 @@
 #include "common.h"
 #include "math.h"
 #include <windows.h>
+#include "renderer.cpp"
 
 bool GlobalIsRunning = true;
 
@@ -58,14 +59,19 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                                             hInstance, 0);
         if(WindowHandle) {
             GlobalIsRunning = true;
-            
-            while(GlobalIsRunning) {
-                MSG Message;
-                while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
-                    TranslateMessage(&Message);
-                    DispatchMessage(&Message);
-                }
+
+            if(InitD3D12()) {
+                while(GlobalIsRunning) {
+                    MSG Message;
+                    while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
+                        TranslateMessage(&Message);
+                        DispatchMessage(&Message);
+                    }
                 
+                }
+		
+            } else {
+                LOG_ERROR("D3D12 Error", "Call to InitD3D12() failed.");
             }
             
         } else {

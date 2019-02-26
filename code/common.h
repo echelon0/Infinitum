@@ -11,3 +11,5 @@ typedef long long int          i64;
 
 typedef float                  f32;
 typedef double                 f64;
+
+#define ARRAY_COUNT(Array) (sizeof(Array) / sizeof((Array)[0]))
