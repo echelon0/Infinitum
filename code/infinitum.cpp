@@ -60,7 +60,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
         if(WindowHandle) {
             GlobalIsRunning = true;
 
-            if(InitD3D12()) {
+            if(InitD3D12(WindowHandle)) {
                 while(GlobalIsRunning) {
                     MSG Message;
                     while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
@@ -69,7 +69,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                     }
                 
                 }
-		
+                
             } else {
                 LOG_ERROR("D3D12 Error", "Call to InitD3D12() failed.");
             }
