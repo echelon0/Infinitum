@@ -1,6 +1,4 @@
 
-#define LOG_ERROR(Title, Message) MessageBoxA(0, Message, Title, MB_OK|MB_ICONERROR)
-
 #include "common.h"
 #include "math.h"
 #include <windows.h>
@@ -71,15 +69,15 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                 }
                 
             } else {
-                LOG_ERROR("D3D12 Error", "Call to InitD3D12() failed.");
+                MessageBoxA(0, "Failed to initialize Direct3D 12.", "Direct3D 12 Error", MB_OK|MB_ICONERROR);
             }
             
         } else {
-            LOG_ERROR("Windows API Error", "Call to CreateWindowExA() failed.");
+            MessageBoxA(0, "Call to CreateWindowExA() failed.", "Direct3D 12 Error", MB_OK|MB_ICONERROR);
         }
         
     } else {
-        LOG_ERROR("Windows API Error", "Call to RegisterClassExA() failed.");
+        MessageBoxA(0, "Call to RegisterClassExA() failed.", "Direct3D 12 Error", MB_OK|MB_ICONERROR);
     }
     
     return 0;
