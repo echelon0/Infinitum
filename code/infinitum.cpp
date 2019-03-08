@@ -1,5 +1,6 @@
 
 #include "common.h"
+#include "string.cpp"
 #include "math.h"
 #include <windows.h>
 #include "renderer.cpp"
