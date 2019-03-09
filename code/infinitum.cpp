@@ -66,7 +66,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                         TranslateMessage(&Message);
                         DispatchMessage(&Message);
                     }
-                
+                    Render(WindowWidth, WindowHeight);
                 }
                 
             } else {

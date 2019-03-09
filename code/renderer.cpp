@@ -1,5 +1,6 @@
 
 #include <D3Dcompiler.h>
+#include <d3d11.h>
 #include <d3d12.h>
 #include <dxgi1_3.h>
 #include <unknwn.h>
@@ -14,7 +15,12 @@ struct d3d12_state {
     ID3D12DescriptorHeap *CBV_SRV_UAV_DescriptorHeap;
     ID3D12Resource *UAV_Compute;
     ID3D12RootSignature *ComputeRootSignature;
-    ID3D12PipelineState *ComputePSO;    
+    ID3D12PipelineState *ComputePSO;
+    ID3D12CommandAllocator *CommandAllocator;
+    ID3D12GraphicsCommandList *CommandList;
+    ID3D12Fence *Fence;
+    UINT64 FenceValue;
+    HANDLE FenceEvent;
 } D3D12State;
 
 char *
@@ -25,6 +31,13 @@ CreateErrorMessage(char *SimpleMsg, HRESULT hr) {
     StrCat(ErrorMsg, "\n\n");
     StrCat(ErrorMsg, (char *)err.ErrorMessage());
     return ErrorMsg;
+}
+
+void
+DisplayErrorMessageBox(char *Title, char *SimpleMsg, HRESULT hr) {
+    char *ErrorMsg = CreateErrorMessage(SimpleMsg, hr); 
+    MessageBoxA(0, ErrorMsg, Title, MB_OK|MB_ICONERROR);
+    free(ErrorMsg);
 }
 
 bool
@@ -40,9 +53,7 @@ InitD3D12(HWND WindowHandle) {
     
     hr = D3D12CreateDevice(0, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&D3D12State.Device));
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to create device.", hr);
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create device.", hr);
         return false;
     }
 
@@ -63,18 +74,14 @@ InitD3D12(HWND WindowHandle) {
     
     hr = D3D12State.Device->CreateCommandQueue(&CommandQueueDesc, IID_PPV_ARGS(&D3D12State.CommandQueue));
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to create command queue.", hr);
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create command queue.", hr);
         return false;
     }   
 
     IDXGIFactory2 *DXGIFactory;
     hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&DXGIFactory));
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to create DXGIFactory object.", hr);                
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create DXGIFactory object.", hr);
         return false;       
     }
     
@@ -94,9 +101,7 @@ InitD3D12(HWND WindowHandle) {
     
     hr = DXGIFactory->CreateSwapChainForHwnd(D3D12State.CommandQueue, WindowHandle, &SwapChainDesc, 0, 0, &D3D12State.SwapChain1);
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to create swap chain.", hr);        
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create swap chain.", hr);
         return false;
     }
 
@@ -108,9 +113,7 @@ InitD3D12(HWND WindowHandle) {
 
     hr = D3D12State.Device->CreateDescriptorHeap(&DescriptorHeapDesc, IID_PPV_ARGS(&D3D12State.CBV_SRV_UAV_DescriptorHeap));
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to create CBV/SRV/UAV descriptor heap.", hr);
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create CBV/SRV/UAV descriptor heap.", hr);
         return false;   
     }
 
@@ -156,9 +159,7 @@ InitD3D12(HWND WindowHandle) {
 
     hr = D3D12SerializeRootSignature(&ComputeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &SerializedRootSignatureBlob, &SerializerErrorBlob);
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to serialize compute root signature.", hr); 
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to serialize compute root signature.", hr);
         return false;
     }
     
@@ -203,11 +204,94 @@ InitD3D12(HWND WindowHandle) {
 
     hr = D3D12State.Device->CreateComputePipelineState(&ComputePipelineStateDesc, IID_PPV_ARGS(&D3D12State.ComputePSO));
     if(FAILED(hr)) {
-        char *ErrorMsg = CreateErrorMessage("Failed to create compute pipeline state object.", hr); 
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create compute pipeline state object.", hr);
         return false;
     }
+    
+    hr = D3D12State.Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&D3D12State.CommandAllocator));
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create command allocator.", hr);
+        return false;   
+    }
+
+    hr = D3D12State.Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12State.CommandAllocator, D3D12State.ComputePSO, IID_PPV_ARGS(&D3D12State.CommandList));
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create command list.", hr);
+        return false;
+    }
+
+    hr = D3D12State.CommandList->Close();
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to close command list at initialization.", hr);
+        return false;
+    }
+
+    hr = D3D12State.Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&D3D12State.Fence));
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create fence.", hr);
+        return false;   
+    }
+    
+    D3D12State.FenceValue = 0;
+    D3D12State.FenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    return true;
+}
+
+bool
+Render(u32 WindowWidth, u32 WindowHeight) {
+    HRESULT hr;
+
+    hr = D3D12State.CommandAllocator->Reset();
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to reset command allocator.", hr);
+        return false;
+    }
+
+    hr = D3D12State.CommandList->Reset(D3D12State.CommandAllocator, NULL);
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to reset command list.", hr);
+        return false;
+    }
+/*
+    D3D12_RESOURCE_BARRIER UAV_Barrier = {};
+    UAV_Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    UAV_Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    UAV_Barrier.UAV = NULL;
+    
+    D3D12State.CommandList->ResourceBarrier(1, &UAV_Barrier);
+*/  
+    D3D12State.CommandList->SetPipelineState(D3D12State.ComputePSO);
+    D3D12State.CommandList->SetComputeRootSignature(D3D12State.ComputeRootSignature);
+    D3D12State.CommandList->SetDescriptorHeaps(1, &D3D12State.CBV_SRV_UAV_DescriptorHeap);
+
+    D3D12State.CommandList->Dispatch((UINT)ceil((f32)WindowWidth / 16.0f), (UINT)ceil((f32)WindowHeight / 16.0f), 1);
+    D3D12State.CommandList->Close();
+
+    ID3D12CommandList *CommandLists[] = {D3D12State.CommandList};
+    D3D12State.CommandQueue->ExecuteCommandLists(1, CommandLists);
+    
+    ID3D12Resource *BackBuffer;
+    hr = D3D12State.SwapChain1->GetBuffer(0, IID_PPV_ARGS(&BackBuffer));
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to retrieve back buffer.", hr);
+        return false;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE HeapHandle = D3D12State.CBV_SRV_UAV_DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    D3D12State.CommandList->CopyResource(BackBuffer, (ID3D12Resource *)HeapHandle.ptr);
+    
+    hr = D3D12State.SwapChain1->Present(1, 0);
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Swap chain present failed.", hr);
+        return false;
+    }
+
+    D3D12State.FenceValue++;
+    D3D12State.CommandQueue->Signal(D3D12State.Fence, D3D12State.FenceValue);
+    D3D12State.Fence->SetEventOnCompletion(D3D12State.FenceValue, D3D12State.FenceEvent);
+    WaitForSingleObject(D3D12State.FenceEvent, INFINITE);
+    
+    //D3D12State.CommandList->ResourceBarrier(1, &UAV_Barrier);
 
     return true;
 }
