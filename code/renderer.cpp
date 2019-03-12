@@ -2,7 +2,7 @@
 #include <D3Dcompiler.h>
 #include <d3d11.h>
 #include <d3d12.h>
-#include <dxgi1_3.h>
+#include <dxgi1_4.h>
 #include <unknwn.h>
 #include <comdef.h>
 
@@ -11,7 +11,7 @@
 struct d3d12_state {
     ID3D12Device *Device;
     ID3D12CommandQueue *CommandQueue;
-    IDXGISwapChain1 *SwapChain1;
+    IDXGISwapChain3 *SwapChain3;
     ID3D12DescriptorHeap *CbvSrvUavDescriptorHeap;
     ID3D12Resource *UavCompute;
     ID3D12RootSignature *ComputeRootSignature;
@@ -21,7 +21,6 @@ struct d3d12_state {
     ID3D12Fence *Fence;
     UINT64 FenceValue;
     HANDLE FenceEvent;
-    u32 BackBufferIndex;
     u32 BackBufferCount;
 } D3D12State;
 
@@ -92,7 +91,6 @@ InitD3D12(HWND WindowHandle) {
     u32 WindowHeight = WindowRect.bottom - WindowRect.top;
     
     D3D12State.BackBufferCount = 2;
-    D3D12State.BackBufferIndex = 0;
     
     DXGI_SWAP_CHAIN_DESC1 SwapChainDesc = {};
     SwapChainDesc.Width = WindowWidth;
@@ -107,12 +105,14 @@ InitD3D12(HWND WindowHandle) {
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     SwapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
     SwapChainDesc.Flags = 0;
-    
-    hr = DXGIFactory->CreateSwapChainForHwnd(D3D12State.CommandQueue, WindowHandle, &SwapChainDesc, 0, 0, &D3D12State.SwapChain1);
+
+    IDXGISwapChain1 *SwapChain1;    
+    hr = DXGIFactory->CreateSwapChainForHwnd(D3D12State.CommandQueue, WindowHandle, &SwapChainDesc, 0, 0, &SwapChain1);
     if(FAILED(hr)) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create swap chain.", hr);
         return false;
     }
+    SwapChain1->QueryInterface(IID_PPV_ARGS(&D3D12State.SwapChain3));
     
     D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc = {};
     DescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -290,14 +290,14 @@ Render(u32 WindowWidth, u32 WindowHeight) {
     D3D12State.CommandList->SetComputeRootDescriptorTable(0, CbvSrvUavDescriptorHandle);
 
     D3D12State.CommandList->Dispatch((UINT)ceil((f32)WindowWidth / 16.0f), (UINT)ceil((f32)WindowHeight / 16.0f), 1);
-    
+
+    UINT BackBufferIndex = D3D12State.SwapChain3->GetCurrentBackBufferIndex();
     ID3D12Resource *BackBuffer;
-    hr = D3D12State.SwapChain1->GetBuffer(D3D12State.BackBufferIndex % D3D12State.BackBufferCount, IID_PPV_ARGS(&BackBuffer));
+    hr = D3D12State.SwapChain3->GetBuffer(BackBufferIndex, IID_PPV_ARGS(&BackBuffer));
     if(FAILED(hr)) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to retrieve back buffer.", hr);
         return false;
     }
-    D3D12State.BackBufferIndex++;
 
     //Transition barriers
     D3D12_RESOURCE_BARRIER UaToSrcCopy = {};
@@ -343,7 +343,7 @@ Render(u32 WindowWidth, u32 WindowHeight) {
     ID3D12CommandList *CommandLists[] = {D3D12State.CommandList};
     D3D12State.CommandQueue->ExecuteCommandLists(1, CommandLists);
     
-    hr = D3D12State.SwapChain1->Present(1, 0);
+    hr = D3D12State.SwapChain3->Present(1, 0);
     if(FAILED(hr)) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Swap chain present failed.", hr);
         return false;
