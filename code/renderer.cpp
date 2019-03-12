@@ -12,8 +12,8 @@ struct d3d12_state {
     ID3D12Device *Device;
     ID3D12CommandQueue *CommandQueue;
     IDXGISwapChain1 *SwapChain1;
-    ID3D12DescriptorHeap *CBV_SRV_UAV_DescriptorHeap;
-    ID3D12Resource *UAV_Compute;
+    ID3D12DescriptorHeap *CbvSrvUavDescriptorHeap;
+    ID3D12Resource *UavCompute;
     ID3D12RootSignature *ComputeRootSignature;
     ID3D12PipelineState *ComputePSO;
     ID3D12CommandAllocator *CommandAllocator;
@@ -21,6 +21,8 @@ struct d3d12_state {
     ID3D12Fence *Fence;
     UINT64 FenceValue;
     HANDLE FenceEvent;
+    u32 BackBufferIndex;
+    u32 BackBufferCount;
 } D3D12State;
 
 char *
@@ -42,7 +44,6 @@ DisplayErrorMessageBox(char *Title, char *SimpleMsg, HRESULT hr) {
 
 bool
 InitD3D12(HWND WindowHandle) {
-    u32 BACK_BUFFER_COUNT = 2;
     HRESULT hr;
 
 #if D3D_DEBUG
@@ -84,16 +85,24 @@ InitD3D12(HWND WindowHandle) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create DXGIFactory object.", hr);
         return false;       
     }
+
+    RECT WindowRect = {};
+    GetWindowRect(WindowHandle, &WindowRect);
+    u32 WindowWidth = WindowRect.right - WindowRect.left;
+    u32 WindowHeight = WindowRect.bottom - WindowRect.top;
+    
+    D3D12State.BackBufferCount = 2;
+    D3D12State.BackBufferIndex = 0;
     
     DXGI_SWAP_CHAIN_DESC1 SwapChainDesc = {};
-    SwapChainDesc.Width = 0;
-    SwapChainDesc.Height = 0;
+    SwapChainDesc.Width = WindowWidth;
+    SwapChainDesc.Height = WindowHeight;
     SwapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     SwapChainDesc.Stereo = 0;
     SwapChainDesc.SampleDesc.Count = 1;
     SwapChainDesc.SampleDesc.Quality = 0;
     SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    SwapChainDesc.BufferCount = BACK_BUFFER_COUNT;
+    SwapChainDesc.BufferCount = D3D12State.BackBufferCount;
     SwapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     SwapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
@@ -104,47 +113,68 @@ InitD3D12(HWND WindowHandle) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create swap chain.", hr);
         return false;
     }
-
+    
     D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc = {};
     DescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     DescriptorHeapDesc.NumDescriptors = 1;
     DescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     DescriptorHeapDesc.NodeMask = 0;
 
-    hr = D3D12State.Device->CreateDescriptorHeap(&DescriptorHeapDesc, IID_PPV_ARGS(&D3D12State.CBV_SRV_UAV_DescriptorHeap));
+    hr = D3D12State.Device->CreateDescriptorHeap(&DescriptorHeapDesc, IID_PPV_ARGS(&D3D12State.CbvSrvUavDescriptorHeap));
     if(FAILED(hr)) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create CBV/SRV/UAV descriptor heap.", hr);
         return false;   
     }
-
-    RECT WindowRect = {};
-    GetWindowRect(WindowHandle, &WindowRect);
-    u32 WindowWidth = WindowRect.right - WindowRect.left;
-    u32 WindowHeight = WindowRect.bottom - WindowRect.top;
     
-    D3D12_CPU_DESCRIPTOR_HANDLE CBV_SRV_UAV_DescriptorHandle = D3D12State.CBV_SRV_UAV_DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_UNORDERED_ACCESS_VIEW_DESC UAV_Desc = {};
-    UAV_Desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    UAV_Desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-    UAV_Desc.Buffer.FirstElement = 0;
-    UAV_Desc.Buffer.NumElements = WindowWidth * WindowHeight;
-    UAV_Desc.Buffer.StructureByteStride = 0;
-    UAV_Desc.Buffer.CounterOffsetInBytes = 0;
-    UAV_Desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12State.CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_UNORDERED_ACCESS_VIEW_DESC UavDesc = {};
+    UavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    UavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    UavDesc.Buffer.FirstElement = 0;
+    UavDesc.Buffer.NumElements = WindowWidth * WindowHeight;
+    UavDesc.Buffer.StructureByteStride = 0;
+    UavDesc.Buffer.CounterOffsetInBytes = 0;
+    UavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
     
-    D3D12State.Device->CreateUnorderedAccessView(D3D12State.UAV_Compute, 0, &UAV_Desc, CBV_SRV_UAV_DescriptorHandle);
+    D3D12State.Device->CreateUnorderedAccessView(D3D12State.UavCompute, 0, &UavDesc, CbvSrvUavDescriptorHandle);
 
-    D3D12_DESCRIPTOR_RANGE UAV_DescriptorRange = {};
-    UAV_DescriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-    UAV_DescriptorRange.NumDescriptors = 1;
-    UAV_DescriptorRange.BaseShaderRegister = 0;
-    UAV_DescriptorRange.RegisterSpace = 0;
-    UAV_DescriptorRange.OffsetInDescriptorsFromTableStart = 0;
+    D3D12_HEAP_PROPERTIES DefaultHeapProperties = {};
+    DefaultHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    DefaultHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    DefaultHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    DefaultHeapProperties.CreationNodeMask = 0;
+    DefaultHeapProperties.VisibleNodeMask = 0;
+
+    D3D12_RESOURCE_DESC UaResourceDesc = {};
+    UaResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    UaResourceDesc.Alignment = 0;
+    UaResourceDesc.Width = WindowWidth;
+    UaResourceDesc.Height = WindowHeight;
+    UaResourceDesc.DepthOrArraySize = 1;
+    UaResourceDesc.MipLevels = 1;
+    UaResourceDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    UaResourceDesc.SampleDesc.Count = 1;
+    UaResourceDesc.SampleDesc.Quality = 0;
+    UaResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    UaResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    
+    hr = D3D12State.Device->CreateCommittedResource(&DefaultHeapProperties, D3D12_HEAP_FLAG_NONE, &UaResourceDesc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, IID_PPV_ARGS(&D3D12State.UavCompute));
+    if(FAILED(hr)) {
+        DisplayErrorMessageBox("Direct3D 12 Error", "Failed to create committed resource: unordered access.", hr);
+        return false;
+    }                                                    
+    
+    D3D12_DESCRIPTOR_RANGE UavDescriptorRange = {};
+    UavDescriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    UavDescriptorRange.NumDescriptors = 1;
+    UavDescriptorRange.BaseShaderRegister = 0;
+    UavDescriptorRange.RegisterSpace = 0;
+    UavDescriptorRange.OffsetInDescriptorsFromTableStart = 0;
     
     D3D12_ROOT_PARAMETER ComputeRootParameter = {};
     ComputeRootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     ComputeRootParameter.DescriptorTable.NumDescriptorRanges = 1;
-    ComputeRootParameter.DescriptorTable.pDescriptorRanges = &UAV_DescriptorRange;
+    ComputeRootParameter.DescriptorTable.pDescriptorRanges = &UavDescriptorRange;
     ComputeRootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     
     D3D12_ROOT_SIGNATURE_DESC ComputeRootSignatureDesc = {};
@@ -252,33 +282,66 @@ Render(u32 WindowWidth, u32 WindowHeight) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to reset command list.", hr);
         return false;
     }
-/*
-    D3D12_RESOURCE_BARRIER UAV_Barrier = {};
-    UAV_Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-    UAV_Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    UAV_Barrier.UAV = NULL;
-    
-    D3D12State.CommandList->ResourceBarrier(1, &UAV_Barrier);
-*/  
+
     D3D12State.CommandList->SetPipelineState(D3D12State.ComputePSO);
     D3D12State.CommandList->SetComputeRootSignature(D3D12State.ComputeRootSignature);
-    D3D12State.CommandList->SetDescriptorHeaps(1, &D3D12State.CBV_SRV_UAV_DescriptorHeap);
+    D3D12State.CommandList->SetDescriptorHeaps(1, &D3D12State.CbvSrvUavDescriptorHeap);
+    D3D12_GPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12State.CbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    D3D12State.CommandList->SetComputeRootDescriptorTable(0, CbvSrvUavDescriptorHandle);
 
     D3D12State.CommandList->Dispatch((UINT)ceil((f32)WindowWidth / 16.0f), (UINT)ceil((f32)WindowHeight / 16.0f), 1);
-    D3D12State.CommandList->Close();
-
-    ID3D12CommandList *CommandLists[] = {D3D12State.CommandList};
-    D3D12State.CommandQueue->ExecuteCommandLists(1, CommandLists);
     
     ID3D12Resource *BackBuffer;
-    hr = D3D12State.SwapChain1->GetBuffer(0, IID_PPV_ARGS(&BackBuffer));
+    hr = D3D12State.SwapChain1->GetBuffer(D3D12State.BackBufferIndex % D3D12State.BackBufferCount, IID_PPV_ARGS(&BackBuffer));
     if(FAILED(hr)) {
         DisplayErrorMessageBox("Direct3D 12 Error", "Failed to retrieve back buffer.", hr);
         return false;
     }
+    D3D12State.BackBufferIndex++;
 
-    D3D12_GPU_DESCRIPTOR_HANDLE HeapHandle = D3D12State.CBV_SRV_UAV_DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-    D3D12State.CommandList->CopyResource(BackBuffer, (ID3D12Resource *)HeapHandle.ptr);
+    //Transition barriers
+    D3D12_RESOURCE_BARRIER UaToSrcCopy = {};
+    UaToSrcCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    UaToSrcCopy.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    UaToSrcCopy.Transition.pResource = D3D12State.UavCompute;
+    UaToSrcCopy.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    UaToSrcCopy.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    UaToSrcCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    
+    D3D12_RESOURCE_BARRIER SrcCopyToUa = {};
+    SrcCopyToUa.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    SrcCopyToUa.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    SrcCopyToUa.Transition.pResource = D3D12State.UavCompute;
+    SrcCopyToUa.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    SrcCopyToUa.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    SrcCopyToUa.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    D3D12_RESOURCE_BARRIER PresentToDestCopy = {};
+    PresentToDestCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    PresentToDestCopy.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    PresentToDestCopy.Transition.pResource = BackBuffer;
+    PresentToDestCopy.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    PresentToDestCopy.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    PresentToDestCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    
+    D3D12_RESOURCE_BARRIER DestCopyToPresent = {};
+    DestCopyToPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    DestCopyToPresent.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    DestCopyToPresent.Transition.pResource = BackBuffer;
+    DestCopyToPresent.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    DestCopyToPresent.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    DestCopyToPresent.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+    
+    D3D12State.CommandList->ResourceBarrier(1, &UaToSrcCopy);
+    D3D12State.CommandList->ResourceBarrier(1, &PresentToDestCopy);
+    D3D12State.CommandList->CopyResource(BackBuffer, D3D12State.UavCompute);
+    D3D12State.CommandList->ResourceBarrier(1, &SrcCopyToUa);
+    D3D12State.CommandList->ResourceBarrier(1, &DestCopyToPresent);
+
+    D3D12State.CommandList->Close();
+    
+    ID3D12CommandList *CommandLists[] = {D3D12State.CommandList};
+    D3D12State.CommandQueue->ExecuteCommandLists(1, CommandLists);
     
     hr = D3D12State.SwapChain1->Present(1, 0);
     if(FAILED(hr)) {
@@ -290,8 +353,6 @@ Render(u32 WindowWidth, u32 WindowHeight) {
     D3D12State.CommandQueue->Signal(D3D12State.Fence, D3D12State.FenceValue);
     D3D12State.Fence->SetEventOnCompletion(D3D12State.FenceValue, D3D12State.FenceEvent);
     WaitForSingleObject(D3D12State.FenceEvent, INFINITE);
-    
-    //D3D12State.CommandList->ResourceBarrier(1, &UAV_Barrier);
 
     return true;
 }
