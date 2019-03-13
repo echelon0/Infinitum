@@ -1,7 +1,7 @@
 @echo off
 
 pushd .
-call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x86
+call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
 popd
 
 if not exist ..\build mkdir ..\build
