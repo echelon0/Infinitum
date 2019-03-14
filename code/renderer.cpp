@@ -141,20 +141,11 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
 
     ID3DBlob *SerializedRootSignatureBlob;
     ID3DBlob *SerializerErrorBlob;
-
     hr = D3D12SerializeRootSignature(&ComputeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &SerializedRootSignatureBlob, &SerializerErrorBlob);
-    ReturnOnError(hr, "Direct3D 12 Error", "Failed to serialize compute root signature.");
+    ReturnOnErrorBlob(hr, "Direct3D 12 Error", "Failed to serialize compute root signature.", SerializerErrorBlob);
     
     hr = D3D12Framework->Device->CreateRootSignature(0, SerializedRootSignatureBlob->GetBufferPointer(), SerializedRootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&D3D12Framework->ComputeRootSignature));
-    if(FAILED(hr)) {
-        char *SimpleMsg = "Failed to create compute root signature.\n\n";       
-        char *ErrorMsg = (char *)malloc(StrLen(SimpleMsg) * sizeof(char) + SerializerErrorBlob->GetBufferSize() + sizeof(char));
-        StrCopy(ErrorMsg, SimpleMsg);
-        StrNCat(ErrorMsg, (char *)SerializerErrorBlob->GetBufferPointer(), (i32)SerializerErrorBlob->GetBufferSize());
-        MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        free(ErrorMsg);
-    }
-    
+    ReturnOnError(hr, "Direct3D 12 Error", "Failed to create compute root signature.");
 
     LPCWSTR ShaderPath = L"../code/shader.hlsl";
     UINT ShaderCompilerFlags = D3DCOMPILE_OPTIMIZATION_LEVEL3;
@@ -162,19 +153,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     ID3DBlob *CSCodeBlob;
     ID3DBlob *CSErrorBlob = 0;
     hr = D3DCompileFromFile(ShaderPath, 0, 0, "CSMain", "cs_5_0", ShaderCompilerFlags, 0, &CSCodeBlob, &CSErrorBlob);
-    if(FAILED(hr)) {
-        if(!CSErrorBlob) {
-            MessageBoxA(0, "Failed to compile compute shader.\n\nCould not retrieve compiler error messages.", "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-        } else {
-            char *SimpleMsg = "Failed to compile compute shader.\n\n";      
-            char *ErrorMsg = (char *)malloc(StrLen(SimpleMsg) * sizeof(char) + CSErrorBlob->GetBufferSize() + sizeof(char));
-            StrCopy(ErrorMsg, SimpleMsg);
-            StrNCat(ErrorMsg, (char *)CSErrorBlob->GetBufferPointer(), (i32)CSErrorBlob->GetBufferSize());
-            MessageBoxA(0, ErrorMsg, "Direct3D 12 Error", MB_OK|MB_ICONERROR);
-            free(ErrorMsg);
-        }
-        return false;
-    }
+    ReturnOnErrorBlob(hr, "Direct3D 12 Error", "Failed to compile compute shader.", CSErrorBlob);
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC ComputePipelineStateDesc = {};
     ComputePipelineStateDesc.pRootSignature = D3D12Framework->ComputeRootSignature;

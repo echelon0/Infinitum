@@ -14,6 +14,7 @@
 #include "win32_input.cpp"
 #include "win32_helper.cpp"
 #include "d3d12_helper.cpp"
+#include "camera.cpp"
 #include "renderer.cpp"
 
 static bool GlobalIsRunning = true;
