@@ -7,6 +7,7 @@ struct d3d12_framework {
     IDXGISwapChain3 *SwapChain3;
     ID3D12DescriptorHeap *CbvSrvUavDescriptorHeap;
     ID3D12Resource *UavCompute;
+    ID3D12Resource *CbvCompute;
     ID3D12RootSignature *ComputeRootSignature;
     ID3D12PipelineState *ComputePSO;
     ID3D12CommandAllocator *CommandAllocator;
@@ -15,6 +16,15 @@ struct d3d12_framework {
     UINT64 FenceValue;
     HANDLE FenceEvent;
     u32 BackBufferCount;
+};
+
+struct upload_constants {
+    u32 iTime;
+    float3 CameraPos;
+    float3 CameraDir;
+    float3 CameraRight;
+    float3 CameraUp;
+    f32 CameraFilmDist;
 };
 
 bool
@@ -81,19 +91,17 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     
     D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc = {};
     DescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    DescriptorHeapDesc.NumDescriptors = 1;
+    DescriptorHeapDesc.NumDescriptors = 2;
     DescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     DescriptorHeapDesc.NodeMask = 0;
 
     hr = D3D12Framework->Device->CreateDescriptorHeap(&DescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->CbvSrvUavDescriptorHeap));
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to create CBV/SRV/UAV descriptor heap.");
 
-    D3D12_HEAP_PROPERTIES DefaultHeapProperties = {};
-    DefaultHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-    DefaultHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    DefaultHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-    DefaultHeapProperties.CreationNodeMask = 0;
-    DefaultHeapProperties.VisibleNodeMask = 0;
+    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();    
+
+    D3D12_HEAP_PROPERTIES DefaultHeapProperties = D3D12HeapProperties(D3D12_HEAP_TYPE_DEFAULT);
+    D3D12_HEAP_PROPERTIES UploadHeapProperties = D3D12HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
     
     D3D12_RESOURCE_DESC UaResourceDesc = {};
     UaResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -108,28 +116,63 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     UaResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     UaResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     
-    hr = D3D12Framework->Device->CreateCommittedResource(&DefaultHeapProperties, D3D12_HEAP_FLAG_NONE, &UaResourceDesc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0, IID_PPV_ARGS(&D3D12Framework->UavCompute));
+    hr = D3D12Framework->Device->CreateCommittedResource(&DefaultHeapProperties, D3D12_HEAP_FLAG_NONE,
+                                                         &UaResourceDesc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                                         0, IID_PPV_ARGS(&D3D12Framework->UavCompute));
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to create committed resource: unordered access.");
     
-    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
     D3D12_UNORDERED_ACCESS_VIEW_DESC UavDesc = {};
     UavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     UavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     UavDesc.Texture2D.MipSlice = 0;
     UavDesc.Texture2D.PlaneSlice = 0;
     D3D12Framework->Device->CreateUnorderedAccessView(D3D12Framework->UavCompute, 0, &UavDesc, CbvSrvUavDescriptorHandle);
-    
+
     D3D12_DESCRIPTOR_RANGE UavDescriptorRange = {};
     UavDescriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     UavDescriptorRange.NumDescriptors = 1;
     UavDescriptorRange.BaseShaderRegister = 0;
     UavDescriptorRange.RegisterSpace = 0;
     UavDescriptorRange.OffsetInDescriptorsFromTableStart = 0;
+
+    D3D12_RESOURCE_DESC CbResourceDesc = {};
+    CbResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    CbResourceDesc.Alignment = 0;    
+    CbResourceDesc.Width = sizeof(upload_constants) + 256 - sizeof(upload_constants) % 256;
+    CbResourceDesc.Height = 1;
+    CbResourceDesc.DepthOrArraySize = 1;
+    CbResourceDesc.MipLevels = 1;    
+    CbResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+    CbResourceDesc.SampleDesc.Count = 1;
+    CbResourceDesc.SampleDesc.Quality = 0;
+    CbResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    CbResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    hr = D3D12Framework->Device->CreateCommittedResource(&UploadHeapProperties, D3D12_HEAP_FLAG_NONE,
+                                                         &CbResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                                         0, IID_PPV_ARGS(&D3D12Framework->CbvCompute));
+    ReturnOnError(hr, "Direct3D 12 Error", "Failed to create committed resource: constant buffer.");
+    
+    D3D12_CONSTANT_BUFFER_VIEW_DESC CbvDesc = {};
+    CbvDesc.BufferLocation = D3D12Framework->CbvCompute->GetGPUVirtualAddress();
+    CbvDesc.SizeInBytes = (UINT)CbResourceDesc.Width;
+    D3D12Framework->Device->CreateConstantBufferView(&CbvDesc, {CbvSrvUavDescriptorHandle.ptr + D3D12Framework->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)});
+
+    D3D12_DESCRIPTOR_RANGE CbvDescriptorRange = {};
+    CbvDescriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+    CbvDescriptorRange.NumDescriptors = 1;
+    CbvDescriptorRange.BaseShaderRegister = 0;
+    CbvDescriptorRange.RegisterSpace = 0;
+    CbvDescriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_DESCRIPTOR_RANGE *DescriptorRanges = (D3D12_DESCRIPTOR_RANGE *)malloc(2 * sizeof(D3D12_DESCRIPTOR_RANGE));
+    DescriptorRanges[0] = UavDescriptorRange;
+    DescriptorRanges[1] = CbvDescriptorRange;
     
     D3D12_ROOT_PARAMETER ComputeRootParameter = {};
     ComputeRootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    ComputeRootParameter.DescriptorTable.NumDescriptorRanges = 1;
-    ComputeRootParameter.DescriptorTable.pDescriptorRanges = &UavDescriptorRange;
+    ComputeRootParameter.DescriptorTable.NumDescriptorRanges = 2;
+    ComputeRootParameter.DescriptorTable.pDescriptorRanges = DescriptorRanges;
     ComputeRootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     
     D3D12_ROOT_SIGNATURE_DESC ComputeRootSignatureDesc = {};
@@ -185,9 +228,22 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
 }
 
 bool
-Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight) {
+Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, upload_constants *Constants) {
+    void *CbPtr;
+    D3D12_RANGE MemoryRange = { 0, sizeof(upload_constants) };    
+    D3D12Framework->CbvCompute->Map(0, &MemoryRange, &CbPtr);
+    //MemCopy(CbPtr, (void *)Constants, (u32)MemoryRange.End);
+    upload_constants *CbStruct = (upload_constants *)CbPtr;
+    CbStruct->iTime = Constants->iTime;
+    CbStruct->CameraPos = Constants->CameraPos;
+    CbStruct->CameraPos = Constants->CameraPos;
+    CbStruct->CameraDir = Constants->CameraDir;
+    CbStruct->CameraRight = Constants->CameraRight;
+    CbStruct->CameraUp = Constants->CameraUp;
+    CbStruct->CameraFilmDist = Constants->CameraFilmDist;
+    D3D12Framework->CbvCompute->Unmap(0, &MemoryRange);
+                      
     HRESULT hr;
-
     hr = D3D12Framework->CommandAllocator->Reset();
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to reset command allocator.");
 

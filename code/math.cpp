@@ -597,16 +597,16 @@ rotate(float3 *vector, float angle, int axis_of_rotation) {
 }
 
 static void 
-rotate(float3 *vector, float angle, float3 *point, float3 *line) { //rotates vector about "line" going through "point"
+rotate(float3 *vector, float angle, float3 point, float3 axis) { //rotates vector about "axis" going through "point"
     float3 vec = *vector;
-    vector->x = (point->x*(line->y*line->y + line->z*line->z) - line->x*(point->y*line->y + point->z*line->z - line->x*vec.x - line->y*vec.y - line->z*vec.z)) *
-        (1.0f - (float)cos(angle)) + vec.x*(float)cos(angle) + ((-point->z)*line->y + point->y*line->z - line->z*vec.y + line->y*vec.z) * (float)sin(angle);
+    vector->x = (point.x*(axis.y*axis.y + axis.z*axis.z) - axis.x*(point.y*axis.y + point.z*axis.z - axis.x*vec.x - axis.y*vec.y - axis.z*vec.z)) *
+        (1.0f - (float)cos(angle)) + vec.x*(float)cos(angle) + ((-point.z)*axis.y + point.y*axis.z - axis.z*vec.y + axis.y*vec.z) * (float)sin(angle);
     
-    vector->y = (point->y*(line->x*line->x + line->z*line->z) - line->y*(point->x*line->x + point->z*line->z - line->x*vec.x - line->y*vec.y - line->z*vec.z)) *
-        (1.0f - (float)cos(angle)) + vec.y*(float)cos(angle) + (point->z*line->x - point->x*line->z + line->z*vec.x - line->x*vec.z) * (float)sin(angle);
+    vector->y = (point.y*(axis.x*axis.x + axis.z*axis.z) - axis.y*(point.x*axis.x + point.z*axis.z - axis.x*vec.x - axis.y*vec.y - axis.z*vec.z)) *
+        (1.0f - (float)cos(angle)) + vec.y*(float)cos(angle) + (point.z*axis.x - point.x*axis.z + axis.z*vec.x - axis.x*vec.z) * (float)sin(angle);
     
-    vector->z = (point->z*(line->x*line->x + line->y*line->y) - line->z*(point->x*line->x + point->y*line->y - line->x*vec.x - line->y*vec.y - line->z*vec.z)) *
-        (1.0f - (float)cos(angle)) + vec.z*(float)cos(angle) + ((-point->y)*line->x + point->x*line->y - line->y*vec.x + line->x*vec.y) * (float)sin(angle);
+    vector->z = (point.z*(axis.x*axis.x + axis.y*axis.y) - axis.z*(point.x*axis.x + point.y*axis.y - axis.x*vec.x - axis.y*vec.y - axis.z*vec.z)) *
+        (1.0f - (float)cos(angle)) + vec.z*(float)cos(angle) + ((-point.y)*axis.x + point.x*axis.y - axis.y*vec.x + axis.x*vec.y) * (float)sin(angle);
 }
 
 inline float

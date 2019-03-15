@@ -8,6 +8,7 @@
 #include <comdef.h>
 
 #include "common.h"
+#include "memory.cpp"
 #include "string.cpp"
 #include "math.cpp"
 #include "win32_error.cpp"
@@ -52,19 +53,39 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                                         0, 0,
                                         hInstance, 0);
     if(!WindowHandle) return 0;
+
+    POINT ClientCenter = { WindowWidth / 2, WindowHeight / 2};    
+    ClientToScreen(WindowHandle, &ClientCenter);
+    GlobalInputState.ClientCenter = int2(ClientCenter.x, ClientCenter.y);    
     
     d3d12_framework D3D12Framework = {};
     if(!InitD3D12(WindowHandle, &D3D12Framework)) return 0;
-
+    
+    u32 iTime = 0;
+    camera Camera = {};
+    InitCamera(&Camera);
+    upload_constants ComputeShaderConstants = {};
     GlobalIsRunning = true;    
     while(GlobalIsRunning) {
+        if(GetActiveWindow() == WindowHandle)
+            SetCursorToClientCenter(&GlobalInputState);
+        
         MSG Message;
         while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
             TranslateMessage(&Message);
             DispatchMessage(&Message);
         }
         
-        Render(&D3D12Framework, WindowWidth, WindowHeight);
+        ComputeShaderConstants.iTime = iTime;
+        ComputeShaderConstants.CameraPos = Camera.Pos;
+        ComputeShaderConstants.CameraDir = Camera.Dir;
+        ComputeShaderConstants.CameraRight = Camera.Right;
+        ComputeShaderConstants.CameraUp = Camera.Up;
+        ComputeShaderConstants.CameraFilmDist = Camera.FilmDist;
+        Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
+        
+        iTime += 1;
+        UpdateCamera(&Camera, &GlobalInputState);
     }
     return 0;
 }
