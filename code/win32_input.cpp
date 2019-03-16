@@ -9,22 +9,22 @@ struct input_state {
     
     u8 LEFT_MOUSE_DOWN;
     u8 RIGHT_MOUSE_DOWN;
-    int2 PREV_CURSOR_POS;
-    int2 CURRENT_CURSOR_POS;
+    int2 PREV_CURSOR_SCREEN_POS;
+    int2 CURRENT_CURSOR_SCREEN_POS;
     u8 CURSOR_RESET_TO_CENTER;
-    int2 ClientCenter;
+    int2 ScreenCenter;
 };
 
 void
-SetCursorToClientCenter(input_state *InputState) {
-    SetCursorPos(InputState->ClientCenter.x, InputState->ClientCenter.y);
+SetCursorToCenter(input_state *InputState) {
+    SetCursorPos(InputState->ScreenCenter.x, InputState->ScreenCenter.y);
     InputState->CURSOR_RESET_TO_CENTER = 1;
-    InputState->PREV_CURSOR_POS = InputState->CURRENT_CURSOR_POS;
-    InputState->CURRENT_CURSOR_POS = int2(InputState->ClientCenter.x, InputState->ClientCenter.y);
+    InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
+    InputState->CURRENT_CURSOR_SCREEN_POS = int2(InputState->ScreenCenter.x, InputState->ScreenCenter.y);
 }
 
 void
-UpdateInputState(input_state *InputState, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch(uMsg) {
         case WM_KEYDOWN: {
             if(wParam == 'W') {
@@ -85,9 +85,10 @@ UpdateInputState(input_state *InputState, UINT uMsg, WPARAM wParam, LPARAM lPara
         } break;
 
         case WM_MOUSEMOVE: {
-            InputState->PREV_CURSOR_POS = InputState->CURRENT_CURSOR_POS;
-            InputState->CURRENT_CURSOR_POS.x = GET_X_LPARAM(lParam);
-            InputState->CURRENT_CURSOR_POS.y = GET_Y_LPARAM(lParam);
-        } break;                
+            InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
+            POINT CurrentPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ClientToScreen(hWnd, &CurrentPos);
+            InputState->CURRENT_CURSOR_SCREEN_POS = int2(CurrentPos.x, CurrentPos.y);
+        } break;
     }
 }

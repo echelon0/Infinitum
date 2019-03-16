@@ -26,7 +26,7 @@ WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if(uMsg == WM_CLOSE || (uMsg == WM_KEYDOWN && wParam == VK_ESCAPE)) {
         GlobalIsRunning = false;
     }
-    UpdateInputState(&GlobalInputState, uMsg, wParam, lParam);
+    UpdateInputState(&GlobalInputState, hWnd, uMsg, wParam, lParam);
     return DefWindowProc(hWnd, uMsg, wParam, lParam);    
 }
 
@@ -54,9 +54,9 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                                         hInstance, 0);
     if(!WindowHandle) return 0;
 
-    POINT ClientCenter = { WindowWidth / 2, WindowHeight / 2};    
-    ClientToScreen(WindowHandle, &ClientCenter);
-    GlobalInputState.ClientCenter = int2(ClientCenter.x, ClientCenter.y);    
+    POINT Center = { WindowWidth / 2, WindowHeight / 2};    
+    ClientToScreen(WindowHandle, &Center);
+    GlobalInputState.ScreenCenter = int2(Center.x, Center.y);    
     
     d3d12_framework D3D12Framework = {};
     if(!InitD3D12(WindowHandle, &D3D12Framework)) return 0;
@@ -68,8 +68,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     GlobalIsRunning = true;    
     while(GlobalIsRunning) {
         if(GetActiveWindow() == WindowHandle)
-            SetCursorToClientCenter(&GlobalInputState);
-        
+            SetCursorToCenter(&GlobalInputState); 
         MSG Message;
         while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
             TranslateMessage(&Message);
@@ -85,7 +84,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
         Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
         
         iTime += 1;
-        UpdateCamera(&Camera, &GlobalInputState);
+        UpdateCamera(&Camera, &GlobalInputState); 
     }
     return 0;
 }

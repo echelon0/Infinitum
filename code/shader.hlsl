@@ -2,17 +2,21 @@
 RWTexture2D<float4> Output : register(u0);
 
 cbuffer Constants : register(b0) {
-    uint iTime;
     float3 CameraPos;
+    uint pack1;
     float3 CameraDir;
+    uint pack2;
     float3 CameraRight;
+    uint pack3;
     float3 CameraUp;
+    uint pack4;
     float CameraFilmDist;
+    uint iTime;    
 };
 
-#define MAX_STEPS 1000
+#define MAX_STEPS 100000
 #define MAX_DIST 10.0
-#define MIN_SURFACE_DIST 0.01
+#define MIN_SURFACE_DIST 0.000001
 #define MAX_ITERATIONS 5
 #define RGB(x, y, z) float3(x / 255.0, y / 255.0, z / 255.0)
 
@@ -129,15 +133,15 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     float2 iResolution = float2(960, 580);
     float aspect = iResolution.x / iResolution.y;
     float2 uv = (thread_id - .5 * iResolution.xy) / iResolution.y;
+    uv.y *= -1.0;    
         
     float3 ColorOut = 0;
 
     float3 Ro = CameraPos;
-    //float3 Rd = normalize(CameraDir * CameraFilmDist + CameraRight * uv.x + CameraUp * uv.y);
-    float3 Rd = normalize(float3(uv.x, uv.y, 1.0));
+    float3 Rd = normalize(CameraDir * CameraFilmDist + CameraRight * uv.x + CameraUp * uv.y);
 
     ColorOut.xyz = MengerSponge(Ro, Rd);
     ColorOut.xyz = pow(ColorOut.xyz, 1.0 / 2.2);
-    uv.y *= -1.0;
+
     Output[thread_id.xy] = float4(ColorOut.xyz, 1.0);
 }

@@ -19,12 +19,16 @@ struct d3d12_framework {
 };
 
 struct upload_constants {
-    u32 iTime;
     float3 CameraPos;
+    u32 pack1;
     float3 CameraDir;
+    u32 pack2;
     float3 CameraRight;
+    u32 pack3;    
     float3 CameraUp;
+    u32 pack4;    
     f32 CameraFilmDist;
+    u32 iTime;    
 };
 
 bool
@@ -235,7 +239,6 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     //MemCopy(CbPtr, (void *)Constants, (u32)MemoryRange.End);
     upload_constants *CbStruct = (upload_constants *)CbPtr;
     CbStruct->iTime = Constants->iTime;
-    CbStruct->CameraPos = Constants->CameraPos;
     CbStruct->CameraPos = Constants->CameraPos;
     CbStruct->CameraDir = Constants->CameraDir;
     CbStruct->CameraRight = Constants->CameraRight;
