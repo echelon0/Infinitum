@@ -24,6 +24,10 @@ struct int2 {
     bool operator == (int2 rhs) {
         return (this->x == rhs.x) && (this->y == rhs.y);
     }
+    
+    bool operator != (int2 rhs) {
+        return !(*this == rhs);
+    }    
 
     int2 operator / (int scalar) {
         return int2(this->x / scalar, this->y / scalar);
@@ -47,6 +51,11 @@ struct float2 {
         this->x = x;
         this->y = y;
     }
+
+    float2(int2 vec) {
+        this->x = (float)vec.x;
+        this->y = (float)vec.y;
+    }    
 
     bool operator == (float2 rhs) {
         return (this->x == rhs.x) && (this->y == rhs.y);
@@ -295,6 +304,14 @@ operator / (float2 vector, float scaler) {
 }
 
 inline float2
+operator / (float2 lhs, float2 rhs) {
+    float2 result;
+    result.x = lhs.x / rhs.x;
+    result.y = lhs.y / rhs.y;
+    return result;    
+}
+
+inline float2
 operator + (float2 lhs, float2 rhs) {
     float2 result;
     result.x = lhs.x + rhs.x;
@@ -512,6 +529,11 @@ operator - (float4x4 lhs, float4x4 rhs) {
         }
     }
     return result;
+}
+
+inline float
+dot(float2 lhs, float2 rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y;
 }
 
 inline float

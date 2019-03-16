@@ -28,7 +28,8 @@ struct upload_constants {
     float3 CameraUp;
     u32 pack4;    
     f32 CameraFilmDist;
-    u32 iTime;    
+    u32 iTime;
+    int2 iResolution;
 };
 
 bool
@@ -238,12 +239,13 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     D3D12Framework->CbvCompute->Map(0, &MemoryRange, &CbPtr);
     //MemCopy(CbPtr, (void *)Constants, (u32)MemoryRange.End);
     upload_constants *CbStruct = (upload_constants *)CbPtr;
-    CbStruct->iTime = Constants->iTime;
     CbStruct->CameraPos = Constants->CameraPos;
     CbStruct->CameraDir = Constants->CameraDir;
     CbStruct->CameraRight = Constants->CameraRight;
     CbStruct->CameraUp = Constants->CameraUp;
     CbStruct->CameraFilmDist = Constants->CameraFilmDist;
+    CbStruct->iTime = Constants->iTime;
+    CbStruct->iResolution = Constants->iResolution;
     D3D12Framework->CbvCompute->Unmap(0, &MemoryRange);
                       
     HRESULT hr;
@@ -294,4 +296,5 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
 
     return true;
 }
+
 

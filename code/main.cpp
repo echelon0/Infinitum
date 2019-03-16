@@ -56,35 +56,44 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
 
     POINT Center = { WindowWidth / 2, WindowHeight / 2};    
     ClientToScreen(WindowHandle, &Center);
-    GlobalInputState.ScreenCenter = int2(Center.x, Center.y);    
+    GlobalInputState.ScreenCenter = int2(Center.x, Center.y);
+    GlobalInputState.WindowDim = int2(WindowWidth, WindowHeight);
+    
+    RECT CursorRectLimit = {WindowPos.x, WindowPos.y, WindowPos.x + WindowWidth, WindowPos.y + WindowHeight};
+    ClipCursor(&CursorRectLimit);
+    ShowCursor(0);    
     
     d3d12_framework D3D12Framework = {};
     if(!InitD3D12(WindowHandle, &D3D12Framework)) return 0;
     
-    u32 iTime = 0;
     camera Camera = {};
-    InitCamera(&Camera);
-    upload_constants ComputeShaderConstants = {};
-    GlobalIsRunning = true;    
+    InitCamera(&Camera);    
+
+    u32 iTime = 0;    
+    GlobalIsRunning = true;
     while(GlobalIsRunning) {
-        if(GetActiveWindow() == WindowHandle)
-            SetCursorToCenter(&GlobalInputState); 
         MSG Message;
         while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
             TranslateMessage(&Message);
             DispatchMessage(&Message);
         }
-        
-        ComputeShaderConstants.iTime = iTime;
+
+        upload_constants ComputeShaderConstants = {};   
         ComputeShaderConstants.CameraPos = Camera.Pos;
-        ComputeShaderConstants.CameraDir = Camera.Dir;
-        ComputeShaderConstants.CameraRight = Camera.Right;
-        ComputeShaderConstants.CameraUp = Camera.Up;
+        ComputeShaderConstants.CameraDir = Camera.Frame.Dir;
+        ComputeShaderConstants.CameraRight = Camera.Frame.Right;
+        ComputeShaderConstants.CameraUp = Camera.Frame.Up;
         ComputeShaderConstants.CameraFilmDist = Camera.FilmDist;
-        Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
+        ComputeShaderConstants.iTime = iTime;   
+        ComputeShaderConstants.iResolution = int2(WindowWidth, WindowHeight);
         
-        iTime += 1;
-        UpdateCamera(&Camera, &GlobalInputState); 
+        Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
+        UpdateCamera(&Camera, &GlobalInputState);       
+        
+        iTime++;
+        
+        if(GetActiveWindow() == WindowHandle)
+            SetCursorPos(GlobalInputState.ScreenCenter.x, GlobalInputState.ScreenCenter.y);
     }
     return 0;
 }

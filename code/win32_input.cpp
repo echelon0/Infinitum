@@ -7,21 +7,11 @@ struct input_state {
     u8 SPACE_KEY;
     u8 CTRL_KEY;
     
-    u8 LEFT_MOUSE_DOWN;
-    u8 RIGHT_MOUSE_DOWN;
     int2 PREV_CURSOR_SCREEN_POS;
     int2 CURRENT_CURSOR_SCREEN_POS;
-    u8 CURSOR_RESET_TO_CENTER;
     int2 ScreenCenter;
+    int2 WindowDim;
 };
-
-void
-SetCursorToCenter(input_state *InputState) {
-    SetCursorPos(InputState->ScreenCenter.x, InputState->ScreenCenter.y);
-    InputState->CURSOR_RESET_TO_CENTER = 1;
-    InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
-    InputState->CURRENT_CURSOR_SCREEN_POS = int2(InputState->ScreenCenter.x, InputState->ScreenCenter.y);
-}
 
 void
 UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -68,26 +58,10 @@ UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, L
             }       
         } break;
 
-        case WM_LBUTTONDOWN: {
-            InputState->LEFT_MOUSE_DOWN = 1;
-        } break;
-
-        case WM_LBUTTONUP: {
-            InputState->LEFT_MOUSE_DOWN = 0;
-        } break;
-            
-        case WM_RBUTTONDOWN: {
-            InputState->RIGHT_MOUSE_DOWN = 1;
-        } break;
-
-        case WM_RBUTTONUP: {
-            InputState->RIGHT_MOUSE_DOWN = 0;
-        } break;
-
         case WM_MOUSEMOVE: {
-            InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
             POINT CurrentPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             ClientToScreen(hWnd, &CurrentPos);
+            InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
             InputState->CURRENT_CURSOR_SCREEN_POS = int2(CurrentPos.x, CurrentPos.y);
         } break;
     }
