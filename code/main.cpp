@@ -58,7 +58,8 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     ClientToScreen(WindowHandle, &Center);
     GlobalInputState.ScreenCenter = int2(Center.x, Center.y);
     GlobalInputState.WindowDim = int2(WindowWidth, WindowHeight);
-    
+
+    SetCursorPos(GlobalInputState.ScreenCenter.x, GlobalInputState.ScreenCenter.y);    
     RECT CursorRectLimit = {WindowPos.x, WindowPos.y, WindowPos.x + WindowWidth, WindowPos.y + WindowHeight};
     ClipCursor(&CursorRectLimit);
     ShowCursor(0);    
