@@ -19,27 +19,36 @@ cbuffer Constants : register(b0) {
 #define MAX_DIST 5.0
 #define MIN_SURFACE_DIST 0.001
 
-#define ORDER 8.0
-#define MAX_ITERATIONS 15.0
+#define MAX_ITERATIONS 10.0
 #define DIVERGENCE 1.5
 #define EPSILON_GRADIENT 0.000001
-//#define EPSILION dist to cam
 
 #define RGB(x, y, z) float3(x / 255.0, y / 255.0, z / 255.0)
 
-struct collision_data {
+struct collision_info {
     float Dist;
     float3 Normal;
     int Iter;
 };
 
-float
+struct dist_iter {
+    float Dist;
+    int Iter;
+};
+
+dist_iter
 DistanceEstimator(float3 Pos) {
     float3 Z = Pos;
     float Dr = 1.0;
     float R = 0.0;
+    int I = 0;
 
-    for(int I = 0; I < MAX_ITERATIONS; I++) {
+    float Speed = 0.05;
+    float MaxOrder = 12;
+    float MinOrder = 4;
+    float Order = ((sin(iTime * Speed)) % MaxOrder) + MinOrder;
+    
+    for(I; I < MAX_ITERATIONS; I++) {
         R = length(Z);
         if(R > DIVERGENCE) {
             break;
@@ -47,59 +56,72 @@ DistanceEstimator(float3 Pos) {
 
         float Theta = acos(Z.z / R);
         float Phi = atan(Z.y / Z.x);
-        Dr = pow(R, ORDER - 1.0) * ORDER * Dr + 1.0;
+        Dr = pow(R, Order - 1.0) * Order * Dr + 1.0;
 
-        float Zr = pow(R, ORDER);
-        Theta = Theta * ORDER;
-        Phi = Phi * ORDER;
+        float Zr = pow(R, Order);
+        Theta = Theta * Order;
+        Phi = Phi * Order;
         
         Z = Zr * float3(sin(Theta) * cos(Phi), sin(Phi) * sin(Theta), cos(Theta));
         Z = Z + Pos;
     }
-    return 0.5 * log(R) * R / Dr;
-}
-
-float
-RayMarch(float3 Ro, float3 Rd) {
-    float TotalDist = 0.0;
-    for(int I = 0; I < MAX_STEPS; I++) {
-        float3 Pos = Ro + TotalDist * Rd;
-        float Dist = DistanceEstimator(Pos);
-        TotalDist += Dist;
-        if(Dist < MIN_SURFACE_DIST) {
-            break;
-        }       
-        if(TotalDist > MAX_DIST) {
-            return -1.0;
-        }
-    }
-    return TotalDist;
+    dist_iter Result;
+    Result.Dist = 0.5 * log(R) * R / Dr;
+    Result.Iter = I;
+    return Result;
 }
 
 float3
-RenderMandelbulb(float3 Ro, float3 Rd) {
-    float3 ColorOut = 0;
-    float Dist = RayMarch(Ro, Rd);
-    if(Dist < 0.0) {
-        return float3(1.0, 1.0, 1.0);
+ComputeNormal(float3 Pos, float PosDist) {
+    float Epsilon = 0.0001;
+    float PartialX = (DistanceEstimator(Pos + float3(Epsilon, 0.0, 0.0)).Dist - PosDist) / Epsilon;
+    float PartialY = (DistanceEstimator(Pos + float3(0.0, Epsilon, 0.0)).Dist - PosDist) / Epsilon;
+    float PartialZ = (DistanceEstimator(Pos + float3(0.0, 0.0, Epsilon)).Dist - PosDist) / Epsilon;
+    float3 Normal = float3(PartialX, PartialY, PartialZ);
+    return Normal;
+}
+
+collision_info
+RayMarch(float3 Ro, float3 Rd) {
+    float TotalDist = 0.0;
+    collision_info Result;
+    float3 Normal = 0.0;
+    for(int I = 0; I < MAX_STEPS; I++) {
+        float3 Pos = Ro + TotalDist * Rd;
+        dist_iter DistIter = DistanceEstimator(Pos);
+        Normal = ComputeNormal(Pos, DistIter.Dist);
+        TotalDist += DistIter.Dist;
+        if(DistIter.Dist < MIN_SURFACE_DIST) {
+            Result.Dist = TotalDist;
+            Result.Normal = Normal;
+            Result.Iter = DistIter.Iter;
+            break;
+        }       
+        if(TotalDist > MAX_DIST) {
+            Result.Dist = -1.0;
+            break;
+        }
     }
-    //float AO = 1.0 - (Collision.Iter / MAX_ITERATIONS);
-    float3 Diffuse = RGB(173, 59, 255);
-    ColorOut.xyz = Diffuse * Dist;
-    return ColorOut;
+    return Result;
 }
 
 [numthreads(16, 16, 1)]
 void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     float2 uv = (thread_id - .5 * iResolution.xy) / iResolution.y;
-    uv.y *= -1.0;    
-        
-    float3 ColorOut = float3(0.0, 0.0, 0.0);
+    uv.y *= -1.0;            
 
     float3 Ro = CameraPos.xyz;
     float3 Rd = normalize(CameraDir * CameraFilmDist + CameraRight * uv.x + CameraUp * uv.y);
 
-    ColorOut = RenderMandelbulb(Ro, Rd);
+    float3 ColorOut = float3(0.0, 0.0, 0.0);
+    collision_info Collision = RayMarch(Ro, Rd);
+    if(Collision.Dist < 0.0) {
+        ColorOut.xyz = 1.0;
+    } else {
+        float AO = 1.0 - (Collision.Iter / MAX_ITERATIONS);
+        float3 LightDir = float3(-1.0, -0.5, -0.3);
+        ColorOut.xyz = max(0.0, dot(Collision.Normal, -LightDir)) * AO;
+    }
 
     ColorOut.xyz = ColorOut.xyz / (1.0 + ColorOut.xyz);
     ColorOut.xyz = pow(ColorOut.xyz, 1.0 / 2.2);

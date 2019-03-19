@@ -14,7 +14,7 @@ struct camera {
 
 void
 InitCamera(camera *Camera) {
-    Camera->Pos = float3(1.5f, 0.0f, 0.0f);
+    Camera->Pos = float3(2.0f, 0.0f, 0.0f);
     Camera->Frame.Dir = float3(-1.0f, 0.0f, 0.0);
     Camera->Frame.Right = float3(0.0f, 0.0f, 1.0f);
     Camera->Frame.Up = float3(0.0f, 1.0f, 0.0f);
