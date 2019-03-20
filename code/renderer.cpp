@@ -1,5 +1,9 @@
 
+//#include "../code/vendor/imgui/imgui.h"
+//#include "../code/vendor/imgui/imgui_impl_dx12.cpp"
+
 #define D3D_DEBUG 1
+#define IMGUI 1
 
 struct d3d12_framework {
     ID3D12Device *Device;
@@ -228,6 +232,10 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
 
     D3D12Framework->FenceValue = 0;
     D3D12Framework->FenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+#ifdef IMGUI
+    
+#endif
     
     return true;
 }

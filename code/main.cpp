@@ -42,8 +42,8 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     
     RegisterClassExA(&WindowClass);
     
-    i32 WindowWidth  = 960;
-    i32 WindowHeight = 580;
+    i32 WindowWidth  = 1366;
+    i32 WindowHeight = 768;
     int2 WindowPos = Win32CalcWindowPosition(WindowWidth, WindowHeight);
         
     HWND WindowHandle = CreateWindowExA(0, WindowClass.lpszClassName,
@@ -68,7 +68,11 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     if(!InitD3D12(WindowHandle, &D3D12Framework)) return 0;
     
     camera Camera = {};
-    InitCamera(&Camera);    
+    InitCamera(&Camera);
+
+    #ifdef IMGUI
+    //ImGui_ImplDX12_Init(&D3D12Framework.Device, 1, DXGI_FORMAT_R8G8B8A8_UNORM, );
+    #endif
 
     u32 iTime = 0;    
     GlobalIsRunning = true;

@@ -17,9 +17,9 @@ cbuffer Constants : register(b0) {
 
 #define MAX_STEPS 256
 #define MAX_DIST 5.0
-#define MIN_SURFACE_DIST 0.001
+#define MIN_SURFACE_DIST min(0.0005 * length(CameraPos), 0.002)
 
-#define MAX_ITERATIONS 10.0
+#define MAX_ITERATIONS 15.0
 #define DIVERGENCE 1.5
 #define EPSILON_GRADIENT 0.000001
 
@@ -41,16 +41,18 @@ DistanceEstimator(float3 Pos) {
     float3 Z = Pos;
     float Dr = 1.0;
     float R = 0.0;
-    int I = 0;
+    float I = 0.0;
 
-    float Speed = 0.05;
+    float Speed = 0.01;
     float MaxOrder = 12;
     float MinOrder = 4;
     float Order = ((sin(iTime * Speed)) % MaxOrder) + MinOrder;
+    Order = 8.0;
     
     for(I; I < MAX_ITERATIONS; I++) {
         R = length(Z);
         if(R > DIVERGENCE) {
+            
             break;
         }
 
@@ -110,17 +112,22 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     float2 uv = (thread_id - .5 * iResolution.xy) / iResolution.y;
     uv.y *= -1.0;            
 
-    float3 Ro = CameraPos.xyz;
+    float3 CamPos = CameraPos;
+    float3 Ro = CamPos.xyz;
     float3 Rd = normalize(CameraDir * CameraFilmDist + CameraRight * uv.x + CameraUp * uv.y);
 
     float3 ColorOut = float3(0.0, 0.0, 0.0);
     collision_info Collision = RayMarch(Ro, Rd);
     if(Collision.Dist < 0.0) {
-        ColorOut.xyz = 1.0;
+        float3 BottomColor = float3(0.0, 0.0, 0.9);
+        float3 TopColor = float3(0.8, 0.8, 1.0);
+        ColorOut.xyz = lerp(BottomColor, TopColor, (Rd.y + 1.0) / 2.0);
     } else {
-        float AO = 1.0 - (Collision.Iter / MAX_ITERATIONS);
-        float3 LightDir = float3(-1.0, -0.5, -0.3);
-        ColorOut.xyz = max(0.0, dot(Collision.Normal, -LightDir)) * AO;
+        float3 LightDir = normalize(float3(-1.0, -0.5, -0.3));
+        LightDir = normalize(CameraDir);
+        float3 Diffuse = max(0.0, dot(Collision.Normal, -LightDir));
+        float AO = pow(1.0 - (Collision.Iter / MAX_ITERATIONS), 4.0);
+        ColorOut.xyz = Diffuse * AO;
     }
 
     ColorOut.xyz = ColorOut.xyz / (1.0 + ColorOut.xyz);
