@@ -16,16 +16,30 @@
 #include "win32_helper.cpp"
 #include "d3d12_helper.cpp"
 #include "camera.cpp"
+
+#include "../code/vendor/imgui/imgui_widgets.cpp"
+#include "../code/vendor/imgui/imgui_draw.cpp"
+#include "../code/vendor/imgui/imgui.cpp"
+#include "../code/vendor/imgui/imgui_impl_win32.cpp"
+#include "../code/vendor/imgui/imgui_impl_dx12.cpp"
 #include "renderer.cpp"
+#include "ui.cpp"
+
 
 static bool GlobalIsRunning = true;
 input_state GlobalInputState = {};
+
+#define IMGUI 1
+#define D3D_DEBUG 1
 
 LRESULT CALLBACK
 WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if(uMsg == WM_CLOSE || (uMsg == WM_KEYDOWN && wParam == VK_ESCAPE)) {
         GlobalIsRunning = false;
     }
+//    if(ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam)) {
+//        return true;
+//   }
     UpdateInputState(&GlobalInputState, hWnd, uMsg, wParam, lParam);
     return DefWindowProc(hWnd, uMsg, wParam, lParam);    
 }
@@ -70,10 +84,8 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     camera Camera = {};
     InitCamera(&Camera);
 
-    #ifdef IMGUI
-    //ImGui_ImplDX12_Init(&D3D12Framework.Device, 1, DXGI_FORMAT_R8G8B8A8_UNORM, );
-    #endif
-
+    InitUI(WindowHandle, &D3D12Framework);
+    
     u32 iTime = 0;    
     GlobalIsRunning = true;
     while(GlobalIsRunning) {
@@ -83,17 +95,19 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
             DispatchMessage(&Message);
         }
 
-        upload_constants ComputeShaderConstants = {};   
+        upload_constants ComputeShaderConstants = {};
         ComputeShaderConstants.CameraPos = Camera.Pos;
         ComputeShaderConstants.CameraDir = Camera.Frame.Dir;
         ComputeShaderConstants.CameraRight = Camera.Frame.Right;
         ComputeShaderConstants.CameraUp = Camera.Frame.Up;
-        ComputeShaderConstants.CameraFilmDist = Camera.FilmDist;
-        ComputeShaderConstants.iTime = iTime;   
+        ComputeShaderConstants.CameraLensDist = Camera.LensDist;
+        ComputeShaderConstants.iTime = iTime;
         ComputeShaderConstants.iResolution = int2(WindowWidth, WindowHeight);
-        
+
+        RenderUI(D3D12Framework.CommandList);   
         Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
-        UpdateCamera(&Camera, &GlobalInputState);       
+
+        UpdateCamera(&Camera, &GlobalInputState);
         
         iTime++;
         

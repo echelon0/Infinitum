@@ -8,9 +8,11 @@ struct ortho {
 struct camera {
     float3 Pos;
     ortho Frame;
-    f32 FilmDist;
+    f32 LensDist;
+    
     float3 TargetPos;
     ortho TargetFrame;
+    f32 TargetLensDist;
 };
 
 void
@@ -19,13 +21,15 @@ InitCamera(camera *Camera) {
     Camera->Frame.Dir = float3(-1.0f, 0.0f, 0.0);
     Camera->Frame.Right = float3(0.0f, 0.0f, 1.0f);
     Camera->Frame.Up = float3(0.0f, 1.0f, 0.0f);
-    Camera->FilmDist = 1.0f;
+    Camera->LensDist = 1.0f;
     Camera->TargetPos = Camera->Pos;
     Camera->TargetFrame = Camera->Frame;
+    Camera->TargetLensDist = Camera->LensDist;
 }
 
 void
 UpdateCamera(camera *Camera, input_state *InputState) {
+    //Translation
     float3 MovementDir = float3(0.0, 0.0, 0.0);
     f32 MovementSpeed = 0.01f;
     MovementDir += Camera->Frame.Dir * InputState->W_KEY;
@@ -36,7 +40,13 @@ UpdateCamera(camera *Camera, input_state *InputState) {
     MovementDir -= Camera->Frame.Up * InputState->CTRL_KEY;
     MovementDir = normalize(MovementDir);
     Camera->TargetPos += MovementDir * MovementSpeed;
+ 
+    //Lens zoom
+    f32 ZoomSpeed = 0.05f;
+    Camera->TargetLensDist -= Camera->LensDist * ZoomSpeed * InputState->DOWN_KEY;
+    Camera->TargetLensDist += Camera->LensDist * ZoomSpeed * InputState->UP_KEY;
 
+    //Rotation
     float2 PixelDragVector = float2(InputState->CURRENT_CURSOR_SCREEN_POS) - float2(InputState->ScreenCenter);
     if((PixelDragVector.x != 0.0f || PixelDragVector.y != 0.0f)) {
         f32 MouseSpeed = 0.65f;
@@ -50,8 +60,21 @@ UpdateCamera(camera *Camera, input_state *InputState) {
     }
 
 
-    f32 TranslationT = 0.4f;
+    f32 TranslationT = 0.35f;
     Camera->Pos = lerp(Camera->Pos, Camera->TargetPos, TranslationT);
+
+    f32 ZoomT = 0.25f;
+    Camera->LensDist = lerp(Camera->LensDist, Camera->TargetLensDist, ZoomT);
+    f32 MinLensDist = 0.5f;
+    f32 MaxLensDist = 2.0f;
+    if(Camera->LensDist > MaxLensDist) {
+        Camera->LensDist = MaxLensDist;
+        Camera->TargetLensDist = MaxLensDist;
+    }
+    if(Camera->LensDist < MinLensDist) {
+        Camera->LensDist = MinLensDist;
+        Camera->TargetLensDist = MinLensDist;
+    }    
     
     f32 RotationT = 0.25f;
     Camera->Frame.Dir = lerp(Camera->Frame.Dir, Camera->TargetFrame.Dir, RotationT);

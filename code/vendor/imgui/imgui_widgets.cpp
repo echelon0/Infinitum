@@ -1145,7 +1145,7 @@ void ImGui::AlignTextToFramePadding()
     window->DC.CurrentLineTextBaseOffset = ImMax(window->DC.CurrentLineTextBaseOffset, g.Style.FramePadding.y);
 }
 
-// Horizontal/vertical separating line
+// Horizontal/verticalo separating line
 void ImGui::Separator()
 {
     ImGuiWindow* window = GetCurrentWindow();

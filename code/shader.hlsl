@@ -10,7 +10,7 @@ cbuffer Constants : register(b0) {
     uint pack3;
     float3 CameraUp;
     uint pack4;
-    float CameraFilmDist;
+    float CameraLensDist;
     uint iTime;
     int2 iResolution;
 };
@@ -114,7 +114,7 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
 
     float3 CamPos = CameraPos;
     float3 Ro = CamPos.xyz;
-    float3 Rd = normalize(CameraDir * CameraFilmDist + CameraRight * uv.x + CameraUp * uv.y);
+    float3 Rd = normalize(CameraDir * CameraLensDist + CameraRight * uv.x + CameraUp * uv.y);
 
     float3 ColorOut = float3(0.0, 0.0, 0.0);
     collision_info Collision = RayMarch(Ro, Rd);

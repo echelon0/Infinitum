@@ -4,6 +4,8 @@ struct input_state {
     u8 A_KEY;
     u8 S_KEY;
     u8 D_KEY;
+    u8 UP_KEY;
+    u8 DOWN_KEY;
     u8 SPACE_KEY;
     u8 CTRL_KEY;
     
@@ -29,8 +31,14 @@ UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, L
             if(wParam == 'D') {
                 InputState->D_KEY = 1;
             }
+            if(wParam == VK_UP) {
+                InputState->UP_KEY = 1;
+            }
+            if(wParam == VK_DOWN) {
+                InputState->DOWN_KEY = 1;
+            }
             if(wParam == VK_SPACE) {
-                InputState->SPACE_KEY = 1;              
+                InputState->SPACE_KEY = 1;
             }
             if(wParam == VK_CONTROL) {
                 InputState->CTRL_KEY = 1;              
@@ -50,11 +58,17 @@ UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, L
             if(wParam == 'D') {
                 InputState->D_KEY = 0;
             }
+            if(wParam == VK_UP) {
+                InputState->UP_KEY = 0;
+            }
+            if(wParam == VK_DOWN) {
+                InputState->DOWN_KEY = 0;
+            }
             if(wParam == VK_SPACE) {
-                InputState->SPACE_KEY = 0;              
+                InputState->SPACE_KEY = 0;
             }
             if(wParam == VK_CONTROL) {
-                InputState->CTRL_KEY = 0;              
+                InputState->CTRL_KEY = 0;
             }       
         } break;
 

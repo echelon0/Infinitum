@@ -1,15 +1,14 @@
 
-//#include "../code/vendor/imgui/imgui.h"
-//#include "../code/vendor/imgui/imgui_impl_dx12.cpp"
-
-#define D3D_DEBUG 1
-#define IMGUI 1
+#define BACK_BUFFER_COUNT 2
 
 struct d3d12_framework {
     ID3D12Device *Device;
     ID3D12CommandQueue *CommandQueue;
     IDXGISwapChain3 *SwapChain3;
+    ID3D12DescriptorHeap *RtvDescriptorHeap;
     ID3D12DescriptorHeap *CbvSrvUavDescriptorHeap;
+    ID3D12Resource *RtvResource[BACK_BUFFER_COUNT];
+    D3D12_CPU_DESCRIPTOR_HANDLE RtvDescHandle[BACK_BUFFER_COUNT];
     ID3D12Resource *UavCompute;
     ID3D12Resource *CbvCompute;
     ID3D12RootSignature *ComputeRootSignature;
@@ -19,7 +18,6 @@ struct d3d12_framework {
     ID3D12Fence *Fence;
     UINT64 FenceValue;
     HANDLE FenceEvent;
-    u32 BackBufferCount;
 };
 
 struct upload_constants {
@@ -31,7 +29,7 @@ struct upload_constants {
     u32 pack3;    
     float3 CameraUp;
     u32 pack4;    
-    f32 CameraFilmDist;
+    f32 CameraLensDist;
     u32 iTime;
     int2 iResolution;
 };
@@ -76,8 +74,6 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     u32 WindowWidth = WindowRect.right - WindowRect.left;
     u32 WindowHeight = WindowRect.bottom - WindowRect.top;
     
-    D3D12Framework->BackBufferCount = 2;
-    
     DXGI_SWAP_CHAIN_DESC1 SwapChainDesc = {};
     SwapChainDesc.Width = WindowWidth;
     SwapChainDesc.Height = WindowHeight;
@@ -86,7 +82,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     SwapChainDesc.SampleDesc.Count = 1;
     SwapChainDesc.SampleDesc.Quality = 0;
     SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    SwapChainDesc.BufferCount = D3D12Framework->BackBufferCount;
+    SwapChainDesc.BufferCount = BACK_BUFFER_COUNT;
     SwapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     SwapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
@@ -98,13 +94,35 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
 
     SwapChain1->QueryInterface(IID_PPV_ARGS(&D3D12Framework->SwapChain3));
     
-    D3D12_DESCRIPTOR_HEAP_DESC DescriptorHeapDesc = {};
-    DescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    DescriptorHeapDesc.NumDescriptors = 2;
-    DescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    DescriptorHeapDesc.NodeMask = 0;
+    D3D12_DESCRIPTOR_HEAP_DESC RtvDescriptorHeapDesc = {};
+    RtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    RtvDescriptorHeapDesc.NumDescriptors = BACK_BUFFER_COUNT;
+    RtvDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    RtvDescriptorHeapDesc.NodeMask = 1;
+    hr = D3D12Framework->Device->CreateDescriptorHeap(&RtvDescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->RtvDescriptorHeap));
+    ReturnOnError(hr, "Direct3D 12 Error", "Failed to create RTV descriptor heap.");    
 
-    hr = D3D12Framework->Device->CreateDescriptorHeap(&DescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->CbvSrvUavDescriptorHeap));
+    SIZE_T rtvDescriptorSize = D3D12Framework->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = D3D12Framework->RtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    for (UINT i = 0; i < BACK_BUFFER_COUNT; i++) {
+        D3D12Framework->RtvDescHandle[i] = rtvHandle;
+        rtvHandle.ptr += rtvDescriptorSize;
+    }
+
+    ID3D12Resource* pBackBuffer;
+    for (UINT i = 0; i < BACK_BUFFER_COUNT; i++) {
+        D3D12Framework->SwapChain3->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
+        D3D12Framework->Device->CreateRenderTargetView(pBackBuffer, NULL, D3D12Framework->RtvDescHandle[i]);
+        D3D12Framework->RtvResource[i] = pBackBuffer;
+    }    
+    
+    D3D12_DESCRIPTOR_HEAP_DESC CbvSrvUavDescriptorHeapDesc = {};
+    CbvSrvUavDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    CbvSrvUavDescriptorHeapDesc.NumDescriptors = 2;
+    CbvSrvUavDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    CbvSrvUavDescriptorHeapDesc.NodeMask = 0;
+
+    hr = D3D12Framework->Device->CreateDescriptorHeap(&CbvSrvUavDescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->CbvSrvUavDescriptorHeap));
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to create CBV/SRV/UAV descriptor heap.");
 
     D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();    
@@ -233,10 +251,6 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     D3D12Framework->FenceValue = 0;
     D3D12Framework->FenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
-#ifdef IMGUI
-    
-#endif
-    
     return true;
 }
 
@@ -245,13 +259,12 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     void *CbPtr;
     D3D12_RANGE MemoryRange = { 0, sizeof(upload_constants) };    
     D3D12Framework->CbvCompute->Map(0, &MemoryRange, &CbPtr);
-    //MemCopy(CbPtr, (void *)Constants, (u32)MemoryRange.End);
     upload_constants *CbStruct = (upload_constants *)CbPtr;
     CbStruct->CameraPos = Constants->CameraPos;
     CbStruct->CameraDir = Constants->CameraDir;
     CbStruct->CameraRight = Constants->CameraRight;
     CbStruct->CameraUp = Constants->CameraUp;
-    CbStruct->CameraFilmDist = Constants->CameraFilmDist;
+    CbStruct->CameraLensDist = Constants->CameraLensDist;
     CbStruct->iTime = Constants->iTime;
     CbStruct->iResolution = Constants->iResolution;
     D3D12Framework->CbvCompute->Unmap(0, &MemoryRange);
@@ -263,19 +276,31 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     hr = D3D12Framework->CommandList->Reset(D3D12Framework->CommandAllocator, NULL);
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to reset command list.");
 
+    UINT BackBufferIndex = D3D12Framework->SwapChain3->GetCurrentBackBufferIndex();
+    ID3D12Resource *BackBuffer;
+    hr = D3D12Framework->SwapChain3->GetBuffer(BackBufferIndex, IID_PPV_ARGS(&BackBuffer));
+    ReturnOnError(hr, "Direct3D 12 Error", "Failed to retrieve back buffer.");    
+
     D3D12Framework->CommandList->SetPipelineState(D3D12Framework->ComputePSO);
     D3D12Framework->CommandList->SetComputeRootSignature(D3D12Framework->ComputeRootSignature);
+
+    D3D12_RESOURCE_BARRIER PresentToRtv = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    D3D12_RESOURCE_BARRIER RtvToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);    
+    D3D12Framework->CommandList->ResourceBarrier(1, &PresentToRtv);
+
+    D3D12Framework->CommandList->ClearRenderTargetView(D3D12Framework->RtvDescHandle[BackBufferIndex], (float[4]){0}, 0, NULL);
+    D3D12Framework->CommandList->OMSetRenderTargets(1, &D3D12Framework->RtvDescHandle[BackBufferIndex], FALSE, NULL);
+
     D3D12Framework->CommandList->SetDescriptorHeaps(1, &D3D12Framework->CbvSrvUavDescriptorHeap);
+    ImGui::Render();
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Framework->CommandList);
+    D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);    
+/*    
     D3D12_GPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
     D3D12Framework->CommandList->SetComputeRootDescriptorTable(0, CbvSrvUavDescriptorHandle);
 
     D3D12Framework->CommandList->Dispatch((UINT)ceil((f32)WindowWidth / 16.0f), (UINT)ceil((f32)WindowHeight / 16.0f), 1);
-
-    UINT BackBufferIndex = D3D12Framework->SwapChain3->GetCurrentBackBufferIndex();
-    ID3D12Resource *BackBuffer;
-    hr = D3D12Framework->SwapChain3->GetBuffer(BackBufferIndex, IID_PPV_ARGS(&BackBuffer));
-    ReturnOnError(hr, "Direct3D 12 Error", "Failed to retrieve back buffer.");
-
+    
     D3D12_RESOURCE_BARRIER UavToSrcCopy = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
     D3D12_RESOURCE_BARRIER SrcCopyToUav = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     D3D12_RESOURCE_BARRIER PresentToDestCopy = D3D12Transition(BackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -288,7 +313,7 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     
     D3D12Framework->CommandList->ResourceBarrier(1, &SrcCopyToUav);
     D3D12Framework->CommandList->ResourceBarrier(1, &DestCopyToPresent);
-
+*/
     D3D12Framework->CommandList->Close();
     
     ID3D12CommandList *CommandLists[] = {D3D12Framework->CommandList};
@@ -304,5 +329,3 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
 
     return true;
 }
-
-
