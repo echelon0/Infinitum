@@ -104,7 +104,10 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
         ComputeShaderConstants.iTime = iTime;
         ComputeShaderConstants.iResolution = int2(WindowWidth, WindowHeight);
 
-        RenderUI(D3D12Framework.CommandList);   
+        ImGui_ImplDX12_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();      
+        BuildUI(D3D12Framework.CommandList);   
         Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
 
         UpdateCamera(&Camera, &GlobalInputState);

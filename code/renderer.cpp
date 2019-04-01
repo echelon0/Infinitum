@@ -6,6 +6,7 @@ struct d3d12_framework {
     ID3D12CommandQueue *CommandQueue;
     IDXGISwapChain3 *SwapChain3;
     ID3D12DescriptorHeap *RtvDescriptorHeap;
+    ID3D12DescriptorHeap *SrvDescriptorHeap;
     ID3D12DescriptorHeap *CbvSrvUavDescriptorHeap;
     ID3D12Resource *RtvResource[BACK_BUFFER_COUNT];
     D3D12_CPU_DESCRIPTOR_HANDLE RtvDescHandle[BACK_BUFFER_COUNT];
@@ -93,7 +94,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to create swap chain.");
 
     SwapChain1->QueryInterface(IID_PPV_ARGS(&D3D12Framework->SwapChain3));
-    
+
     D3D12_DESCRIPTOR_HEAP_DESC RtvDescriptorHeapDesc = {};
     RtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     RtvDescriptorHeapDesc.NumDescriptors = BACK_BUFFER_COUNT;
@@ -114,8 +115,17 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
         D3D12Framework->SwapChain3->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
         D3D12Framework->Device->CreateRenderTargetView(pBackBuffer, NULL, D3D12Framework->RtvDescHandle[i]);
         D3D12Framework->RtvResource[i] = pBackBuffer;
-    }    
-    
+    }
+
+    D3D12_DESCRIPTOR_HEAP_DESC SrvDescriptorHeapDesc = {};
+    SrvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    SrvDescriptorHeapDesc.NumDescriptors = 1;
+    SrvDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    SrvDescriptorHeapDesc.NodeMask = 0;
+
+    hr = D3D12Framework->Device->CreateDescriptorHeap(&SrvDescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->SrvDescriptorHeap));
+    ReturnOnError(hr, "Direct3D 12 Error", "Failed to create SRV descriptor heap for ImGui.");
+
     D3D12_DESCRIPTOR_HEAP_DESC CbvSrvUavDescriptorHeapDesc = {};
     CbvSrvUavDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     CbvSrvUavDescriptorHeapDesc.NumDescriptors = 2;
@@ -125,7 +135,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     hr = D3D12Framework->Device->CreateDescriptorHeap(&CbvSrvUavDescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->CbvSrvUavDescriptorHeap));
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to create CBV/SRV/UAV descriptor heap.");
 
-    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();    
+    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
     D3D12_HEAP_PROPERTIES DefaultHeapProperties = D3D12HeapProperties(D3D12_HEAP_TYPE_DEFAULT);
     D3D12_HEAP_PROPERTIES UploadHeapProperties = D3D12HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
@@ -284,18 +294,11 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     D3D12Framework->CommandList->SetPipelineState(D3D12Framework->ComputePSO);
     D3D12Framework->CommandList->SetComputeRootSignature(D3D12Framework->ComputeRootSignature);
 
-    D3D12_RESOURCE_BARRIER PresentToRtv = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    D3D12_RESOURCE_BARRIER RtvToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);    
-    D3D12Framework->CommandList->ResourceBarrier(1, &PresentToRtv);
+    D3D12Framework->CommandList->OMSetRenderTargets(1, &D3D12Framework->RtvDescHandle[BackBufferIndex], FALSE, NULL);    
+    D3D12Framework->CommandList->ClearRenderTargetView(D3D12Framework->RtvDescHandle[BackBufferIndex], (float[4]){1}, 0, NULL);
 
-    D3D12Framework->CommandList->ClearRenderTargetView(D3D12Framework->RtvDescHandle[BackBufferIndex], (float[4]){0}, 0, NULL);
-    D3D12Framework->CommandList->OMSetRenderTargets(1, &D3D12Framework->RtvDescHandle[BackBufferIndex], FALSE, NULL);
+    D3D12Framework->CommandList->SetDescriptorHeaps(1, &D3D12Framework->CbvSrvUavDescriptorHeap);    
 
-    D3D12Framework->CommandList->SetDescriptorHeaps(1, &D3D12Framework->CbvSrvUavDescriptorHeap);
-    ImGui::Render();
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Framework->CommandList);
-    D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);    
-/*    
     D3D12_GPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
     D3D12Framework->CommandList->SetComputeRootDescriptorTable(0, CbvSrvUavDescriptorHandle);
 
@@ -303,17 +306,26 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     
     D3D12_RESOURCE_BARRIER UavToSrcCopy = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
     D3D12_RESOURCE_BARRIER SrcCopyToUav = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_RESOURCE_BARRIER PresentToDestCopy = D3D12Transition(BackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-    D3D12_RESOURCE_BARRIER DestCopyToPresent = D3D12Transition(BackBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);    
+    D3D12_RESOURCE_BARRIER PresentToDestCopy = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_RESOURCE_BARRIER DestCopyToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
     
     D3D12Framework->CommandList->ResourceBarrier(1, &UavToSrcCopy);
     D3D12Framework->CommandList->ResourceBarrier(1, &PresentToDestCopy);
     
-    D3D12Framework->CommandList->CopyResource(BackBuffer, D3D12Framework->UavCompute);
-    
+    D3D12Framework->CommandList->CopyResource(D3D12Framework->RtvResource[BackBufferIndex], D3D12Framework->UavCompute);
+
     D3D12Framework->CommandList->ResourceBarrier(1, &SrcCopyToUav);
     D3D12Framework->CommandList->ResourceBarrier(1, &DestCopyToPresent);
-*/
+
+    D3D12_RESOURCE_BARRIER PresentToRtv = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    D3D12_RESOURCE_BARRIER RtvToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    D3D12Framework->CommandList->ResourceBarrier(1, &PresentToRtv);
+
+    ImGui::Render();
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Framework->CommandList);
+    
+    D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);    
+
     D3D12Framework->CommandList->Close();
     
     ID3D12CommandList *CommandLists[] = {D3D12Framework->CommandList};
