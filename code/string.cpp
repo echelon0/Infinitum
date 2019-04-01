@@ -1,10 +1,19 @@
 
+void
+MemCpy(void *Dest, void *Source, int nBytes) {
+    char *CharDest = (char *)Dest;
+    char *CharSource = (char *)Source;
+    for(int I = 0; I < nBytes; I++) {
+        *CharDest++ = *CharSource++;
+    }
+}
+
 int
-StrLen(char *string) {
+StrLen(char *String) {
     int Count = 0;
-    while(*string) {
+    while(*String) {
         Count++;
-        *string++;
+        *String++;
     }
     return Count;
 }

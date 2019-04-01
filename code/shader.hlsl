@@ -3,7 +3,7 @@ RWTexture2D<float4> Output : register(u0);
 
 cbuffer Constants : register(b0) {
     float3 Color;
-    uint pack0;
+    float AoDegree;
     float3 CameraPos;
     uint pack1;
     float3 CameraDir;
@@ -19,7 +19,8 @@ cbuffer Constants : register(b0) {
 
 #define MAX_STEPS 256
 #define MAX_DIST 5.0
-#define MIN_SURFACE_DIST min(0.0005 * length(CameraPos), 0.002)
+//#define MIN_SURFACE_DIST min(0.0005 * length(CameraPos), 0.002)
+#define MIN_SURFACE_DIST min(0.0005, DistanceEstimator(CameraPos).Dist)
 
 #define MAX_ITERATIONS 15.0
 #define DIVERGENCE 1.5
@@ -127,7 +128,10 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
         float3 LightDir = normalize(float3(-1.0, -0.5, -0.3));
         LightDir = normalize(CameraDir);
         float3 Diffuse = Color * max(0.0, dot(Collision.Normal, -LightDir));
-        float AO = pow(1.0 - (Collision.Iter / MAX_ITERATIONS), 4.0);
+        float AO = 1.0;
+        if(AoDegree > 0) {
+            AO = pow(1.0 - (Collision.Iter / MAX_ITERATIONS), AoDegree);
+        }
         ColorOut.xyz = Diffuse * AO;
     }
 

@@ -22,13 +22,14 @@ struct d3d12_framework {
     HANDLE FenceEvent;
 };
 
-struct brdf_parameters {
+struct user_shader_input {
     float3 Color;
+    float AoDegree;
 };
 
 struct upload_constants {
     float3 Color;
-    u32 pack0;
+    float AoDegree;
     float3 CameraPos;
     u32 pack1;
     float3 CameraDir;
@@ -41,6 +42,29 @@ struct upload_constants {
     u32 iTime;
     int2 iResolution;
 };
+
+void
+DefaultUserShaderInput(user_shader_input *ShaderInput) {
+    ShaderInput->Color = float3(1.0f, 1.0f, 1.0f);
+    ShaderInput->AoDegree = 0.0f;
+}
+
+void
+FillUploadConstants(upload_constants *UploadConstants,
+                    user_shader_input *ShaderInput,
+                    camera *Camera,
+                    u32 iTime,
+                    int2 iResolution) {
+        UploadConstants->Color = ShaderInput->Color;
+        UploadConstants->AoDegree = ShaderInput->AoDegree;
+        UploadConstants->CameraPos = Camera->Pos;
+        UploadConstants->CameraDir = Camera->Frame.Dir;
+        UploadConstants->CameraRight = Camera->Frame.Right;
+        UploadConstants->CameraUp = Camera->Frame.Up;
+        UploadConstants->CameraLensDist = Camera->LensDist;
+        UploadConstants->iTime = iTime;
+        UploadConstants->iResolution = iResolution;
+}
 
 bool
 InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
@@ -273,14 +297,7 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     D3D12_RANGE MemoryRange = { 0, sizeof(upload_constants) };    
     D3D12Framework->CbvCompute->Map(0, &MemoryRange, &CbPtr);
     upload_constants *CbStruct = (upload_constants *)CbPtr;
-    CbStruct->Color = Constants->Color;
-    CbStruct->CameraPos = Constants->CameraPos;
-    CbStruct->CameraDir = Constants->CameraDir;
-    CbStruct->CameraRight = Constants->CameraRight;
-    CbStruct->CameraUp = Constants->CameraUp;
-    CbStruct->CameraLensDist = Constants->CameraLensDist;
-    CbStruct->iTime = Constants->iTime;
-    CbStruct->iResolution = Constants->iResolution;
+    MemCpy(CbStruct, Constants, sizeof(upload_constants));
     D3D12Framework->CbvCompute->Unmap(0, &MemoryRange);
                       
     HRESULT hr;
