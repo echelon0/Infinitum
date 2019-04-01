@@ -2,6 +2,8 @@
 RWTexture2D<float4> Output : register(u0);
 
 cbuffer Constants : register(b0) {
+    float3 Color;
+    uint pack0;
     float3 CameraPos;
     uint pack1;
     float3 CameraDir;
@@ -52,7 +54,6 @@ DistanceEstimator(float3 Pos) {
     for(I; I < MAX_ITERATIONS; I++) {
         R = length(Z);
         if(R > DIVERGENCE) {
-            
             break;
         }
 
@@ -125,7 +126,7 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     } else {
         float3 LightDir = normalize(float3(-1.0, -0.5, -0.3));
         LightDir = normalize(CameraDir);
-        float3 Diffuse = max(0.0, dot(Collision.Normal, -LightDir));
+        float3 Diffuse = Color * max(0.0, dot(Collision.Normal, -LightDir));
         float AO = pow(1.0 - (Collision.Iter / MAX_ITERATIONS), 4.0);
         ColorOut.xyz = Diffuse * AO;
     }

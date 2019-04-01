@@ -28,19 +28,29 @@
 
 static bool GlobalIsRunning = true;
 input_state GlobalInputState = {};
+u32 GlobalMenuOpen = 0;
+WPARAM MenuToggleButton = 'M';
 
-#define IMGUI 1
 #define D3D_DEBUG 1
 
 LRESULT CALLBACK
 WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    if(uMsg == WM_CLOSE || (uMsg == WM_KEYDOWN && wParam == VK_ESCAPE)) {
+    if(uMsg == WM_CLOSE) {
         GlobalIsRunning = false;
     }
-//    if(ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam)) {
-//        return true;
-//   }
-    UpdateInputState(&GlobalInputState, hWnd, uMsg, wParam, lParam);
+    if(uMsg == WM_KEYDOWN && wParam == VK_ESCAPE) {
+        if(GlobalMenuOpen)
+            GlobalMenuOpen = 0;
+        else
+            GlobalIsRunning = 0;
+    }
+    if(uMsg == WM_KEYDOWN && wParam == MenuToggleButton) {
+        GlobalMenuOpen = !GlobalMenuOpen;
+    }
+    if(ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam)) {
+        return true;
+    }
+    UpdateInputState(&GlobalInputState, hWnd, uMsg, wParam, lParam, GlobalMenuOpen);
     return DefWindowProc(hWnd, uMsg, wParam, lParam);    
 }
 
@@ -76,7 +86,6 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     SetCursorPos(GlobalInputState.ScreenCenter.x, GlobalInputState.ScreenCenter.y);    
     RECT CursorRectLimit = {WindowPos.x, WindowPos.y, WindowPos.x + WindowWidth, WindowPos.y + WindowHeight};
     ClipCursor(&CursorRectLimit);
-    ShowCursor(0);    
     
     d3d12_framework D3D12Framework = {};
     if(!InitD3D12(WindowHandle, &D3D12Framework)) return 0;
@@ -88,6 +97,8 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     
     u32 iTime = 0;    
     GlobalIsRunning = true;
+    brdf_parameters BrdfParameters = {};
+    BrdfParameters.Color = float3(0.4f, 0.5f, 1.0f);
     while(GlobalIsRunning) {
         MSG Message;
         while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
@@ -95,7 +106,14 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
             DispatchMessage(&Message);
         }
 
+        ImGui_ImplDX12_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        if(GlobalMenuOpen) BuildUI(&BrdfParameters);
+        
         upload_constants ComputeShaderConstants = {};
+        ComputeShaderConstants.Color = BrdfParameters.Color;       
         ComputeShaderConstants.CameraPos = Camera.Pos;
         ComputeShaderConstants.CameraDir = Camera.Frame.Dir;
         ComputeShaderConstants.CameraRight = Camera.Frame.Right;
@@ -103,18 +121,15 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
         ComputeShaderConstants.CameraLensDist = Camera.LensDist;
         ComputeShaderConstants.iTime = iTime;
         ComputeShaderConstants.iResolution = int2(WindowWidth, WindowHeight);
-
-        ImGui_ImplDX12_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();      
-        BuildUI(D3D12Framework.CommandList);   
+        
         Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
 
         UpdateCamera(&Camera, &GlobalInputState);
         
         iTime++;
-        
-        if(GetActiveWindow() == WindowHandle)
+
+        ShowCursor(GlobalMenuOpen);  
+        if((GetActiveWindow() == WindowHandle) && !GlobalMenuOpen)
             SetCursorPos(GlobalInputState.ScreenCenter.x, GlobalInputState.ScreenCenter.y);
     }
     return 0;

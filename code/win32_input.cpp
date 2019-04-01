@@ -16,7 +16,7 @@ struct input_state {
 };
 
 void
-UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, u32 MenuOpen) {
     switch(uMsg) {
         case WM_KEYDOWN: {
             if(wParam == 'W') {
@@ -78,5 +78,10 @@ UpdateInputState(input_state *InputState, HWND hWnd, UINT uMsg, WPARAM wParam, L
             InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
             InputState->CURRENT_CURSOR_SCREEN_POS = int2(CurrentPos.x, CurrentPos.y);
         } break;
+    }
+
+    if(MenuOpen) { //Reset the cursor state to default (screen center) if the menu is open.
+        InputState->CURRENT_CURSOR_SCREEN_POS = InputState->ScreenCenter;
+        InputState->PREV_CURSOR_SCREEN_POS = InputState->CURRENT_CURSOR_SCREEN_POS;
     }
 }

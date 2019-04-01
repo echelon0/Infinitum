@@ -6,12 +6,13 @@ struct d3d12_framework {
     ID3D12CommandQueue *CommandQueue;
     IDXGISwapChain3 *SwapChain3;
     ID3D12DescriptorHeap *RtvDescriptorHeap;
-    ID3D12DescriptorHeap *SrvDescriptorHeap;
     ID3D12DescriptorHeap *CbvSrvUavDescriptorHeap;
     ID3D12Resource *RtvResource[BACK_BUFFER_COUNT];
     D3D12_CPU_DESCRIPTOR_HANDLE RtvDescHandle[BACK_BUFFER_COUNT];
     ID3D12Resource *UavCompute;
     ID3D12Resource *CbvCompute;
+    D3D12_CPU_DESCRIPTOR_HANDLE ImGuiSrvCPUDescHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE ImGuiSrvGPUDescHandle;    
     ID3D12RootSignature *ComputeRootSignature;
     ID3D12PipelineState *ComputePSO;
     ID3D12CommandAllocator *CommandAllocator;
@@ -21,7 +22,13 @@ struct d3d12_framework {
     HANDLE FenceEvent;
 };
 
+struct brdf_parameters {
+    float3 Color;
+};
+
 struct upload_constants {
+    float3 Color;
+    u32 pack0;
     float3 CameraPos;
     u32 pack1;
     float3 CameraDir;
@@ -117,25 +124,21 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
         D3D12Framework->RtvResource[i] = pBackBuffer;
     }
 
-    D3D12_DESCRIPTOR_HEAP_DESC SrvDescriptorHeapDesc = {};
-    SrvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    SrvDescriptorHeapDesc.NumDescriptors = 1;
-    SrvDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    SrvDescriptorHeapDesc.NodeMask = 0;
-
-    hr = D3D12Framework->Device->CreateDescriptorHeap(&SrvDescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->SrvDescriptorHeap));
-    ReturnOnError(hr, "Direct3D 12 Error", "Failed to create SRV descriptor heap for ImGui.");
-
+    UINT DescCountWithImGuiSrv = 3;
     D3D12_DESCRIPTOR_HEAP_DESC CbvSrvUavDescriptorHeapDesc = {};
     CbvSrvUavDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    CbvSrvUavDescriptorHeapDesc.NumDescriptors = 2;
+    CbvSrvUavDescriptorHeapDesc.NumDescriptors = DescCountWithImGuiSrv;
     CbvSrvUavDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     CbvSrvUavDescriptorHeapDesc.NodeMask = 0;
 
     hr = D3D12Framework->Device->CreateDescriptorHeap(&CbvSrvUavDescriptorHeapDesc, IID_PPV_ARGS(&D3D12Framework->CbvSrvUavDescriptorHeap));
     ReturnOnError(hr, "Direct3D 12 Error", "Failed to create CBV/SRV/UAV descriptor heap.");
 
-    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE CbvSrvUavCPUDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE CbvSrvUavGPUDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();    
+
+    D3D12Framework->ImGuiSrvCPUDescHandle = {CbvSrvUavCPUDescriptorHandle.ptr + (DescCountWithImGuiSrv - 1) * D3D12Framework->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)};
+    D3D12Framework->ImGuiSrvGPUDescHandle = {CbvSrvUavGPUDescriptorHandle.ptr + (DescCountWithImGuiSrv - 1) * D3D12Framework->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)};
 
     D3D12_HEAP_PROPERTIES DefaultHeapProperties = D3D12HeapProperties(D3D12_HEAP_TYPE_DEFAULT);
     D3D12_HEAP_PROPERTIES UploadHeapProperties = D3D12HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
@@ -163,7 +166,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     UavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     UavDesc.Texture2D.MipSlice = 0;
     UavDesc.Texture2D.PlaneSlice = 0;
-    D3D12Framework->Device->CreateUnorderedAccessView(D3D12Framework->UavCompute, 0, &UavDesc, CbvSrvUavDescriptorHandle);
+    D3D12Framework->Device->CreateUnorderedAccessView(D3D12Framework->UavCompute, 0, &UavDesc, CbvSrvUavCPUDescriptorHandle);
 
     D3D12_DESCRIPTOR_RANGE UavDescriptorRange = {};
     UavDescriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
@@ -193,7 +196,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
     D3D12_CONSTANT_BUFFER_VIEW_DESC CbvDesc = {};
     CbvDesc.BufferLocation = D3D12Framework->CbvCompute->GetGPUVirtualAddress();
     CbvDesc.SizeInBytes = (UINT)CbResourceDesc.Width;
-    D3D12Framework->Device->CreateConstantBufferView(&CbvDesc, {CbvSrvUavDescriptorHandle.ptr + D3D12Framework->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)});
+    D3D12Framework->Device->CreateConstantBufferView(&CbvDesc, {CbvSrvUavCPUDescriptorHandle.ptr + D3D12Framework->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)});
 
     D3D12_DESCRIPTOR_RANGE CbvDescriptorRange = {};
     CbvDescriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
@@ -270,6 +273,7 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     D3D12_RANGE MemoryRange = { 0, sizeof(upload_constants) };    
     D3D12Framework->CbvCompute->Map(0, &MemoryRange, &CbPtr);
     upload_constants *CbStruct = (upload_constants *)CbPtr;
+    CbStruct->Color = Constants->Color;
     CbStruct->CameraPos = Constants->CameraPos;
     CbStruct->CameraDir = Constants->CameraDir;
     CbStruct->CameraRight = Constants->CameraRight;
@@ -302,30 +306,34 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     D3D12_GPU_DESCRIPTOR_HANDLE CbvSrvUavDescriptorHandle = D3D12Framework->CbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
     D3D12Framework->CommandList->SetComputeRootDescriptorTable(0, CbvSrvUavDescriptorHandle);
 
-    D3D12Framework->CommandList->Dispatch((UINT)ceil((f32)WindowWidth / 16.0f), (UINT)ceil((f32)WindowHeight / 16.0f), 1);
+    { //compute shader
+        D3D12Framework->CommandList->Dispatch((UINT)ceil((f32)WindowWidth / 16.0f), (UINT)ceil((f32)WindowHeight / 16.0f), 1);
     
-    D3D12_RESOURCE_BARRIER UavToSrcCopy = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    D3D12_RESOURCE_BARRIER SrcCopyToUav = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_RESOURCE_BARRIER PresentToDestCopy = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-    D3D12_RESOURCE_BARRIER DestCopyToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+        D3D12_RESOURCE_BARRIER UavToSrcCopy = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        D3D12_RESOURCE_BARRIER SrcCopyToUav = D3D12Transition(D3D12Framework->UavCompute, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        D3D12_RESOURCE_BARRIER PresentToDestCopy = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+        D3D12_RESOURCE_BARRIER DestCopyToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
     
-    D3D12Framework->CommandList->ResourceBarrier(1, &UavToSrcCopy);
-    D3D12Framework->CommandList->ResourceBarrier(1, &PresentToDestCopy);
+        D3D12Framework->CommandList->ResourceBarrier(1, &UavToSrcCopy);
+        D3D12Framework->CommandList->ResourceBarrier(1, &PresentToDestCopy);
     
-    D3D12Framework->CommandList->CopyResource(D3D12Framework->RtvResource[BackBufferIndex], D3D12Framework->UavCompute);
+        D3D12Framework->CommandList->CopyResource(D3D12Framework->RtvResource[BackBufferIndex], D3D12Framework->UavCompute);
 
-    D3D12Framework->CommandList->ResourceBarrier(1, &SrcCopyToUav);
-    D3D12Framework->CommandList->ResourceBarrier(1, &DestCopyToPresent);
-
-    D3D12_RESOURCE_BARRIER PresentToRtv = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    D3D12_RESOURCE_BARRIER RtvToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    D3D12Framework->CommandList->ResourceBarrier(1, &PresentToRtv);
-
-    ImGui::Render();
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Framework->CommandList);
+        D3D12Framework->CommandList->ResourceBarrier(1, &SrcCopyToUav);
+        D3D12Framework->CommandList->ResourceBarrier(1, &DestCopyToPresent);
+    }
+    { //render imgui
+        D3D12_RESOURCE_BARRIER PresentToRtv = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        D3D12_RESOURCE_BARRIER RtvToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     
-    D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);    
+        D3D12Framework->CommandList->ResourceBarrier(1, &PresentToRtv);
 
+        ImGui::Render();
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Framework->CommandList);
+    
+        D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);    
+    }
+    
     D3D12Framework->CommandList->Close();
     
     ID3D12CommandList *CommandLists[] = {D3D12Framework->CommandList};
