@@ -292,7 +292,7 @@ InitD3D12(HWND WindowHandle, d3d12_framework *D3D12Framework) {
 }
 
 bool
-Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, upload_constants *Constants) {
+Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, upload_constants *Constants, u32 RenderImgui) {
     void *CbPtr;
     D3D12_RANGE MemoryRange = { 0, sizeof(upload_constants) };    
     D3D12Framework->CbvCompute->Map(0, &MemoryRange, &CbPtr);
@@ -315,8 +315,8 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
     D3D12Framework->CommandList->SetPipelineState(D3D12Framework->ComputePSO);
     D3D12Framework->CommandList->SetComputeRootSignature(D3D12Framework->ComputeRootSignature);
 
-    D3D12Framework->CommandList->OMSetRenderTargets(1, &D3D12Framework->RtvDescHandle[BackBufferIndex], FALSE, NULL);    
-    D3D12Framework->CommandList->ClearRenderTargetView(D3D12Framework->RtvDescHandle[BackBufferIndex], (float[4]){1}, 0, NULL);
+    D3D12Framework->CommandList->OMSetRenderTargets(1, &D3D12Framework->RtvDescHandle[BackBufferIndex], FALSE, NULL);
+    D3D12Framework->CommandList->ClearRenderTargetView(D3D12Framework->RtvDescHandle[BackBufferIndex], (float[4]){0, 0, 1}, 0, NULL);
 
     D3D12Framework->CommandList->SetDescriptorHeaps(1, &D3D12Framework->CbvSrvUavDescriptorHeap);    
 
@@ -331,24 +331,19 @@ Render(d3d12_framework *D3D12Framework, u32 WindowWidth, u32 WindowHeight, uploa
         D3D12_RESOURCE_BARRIER PresentToDestCopy = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
         D3D12_RESOURCE_BARRIER DestCopyToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
     
-        D3D12Framework->CommandList->ResourceBarrier(1, &UavToSrcCopy);
-        D3D12Framework->CommandList->ResourceBarrier(1, &PresentToDestCopy);
-    
+        D3D12Framework->CommandList->ResourceBarrier(2, (D3D12_RESOURCE_BARRIER[2]){UavToSrcCopy, PresentToDestCopy});
         D3D12Framework->CommandList->CopyResource(D3D12Framework->RtvResource[BackBufferIndex], D3D12Framework->UavCompute);
-
-        D3D12Framework->CommandList->ResourceBarrier(1, &SrcCopyToUav);
-        D3D12Framework->CommandList->ResourceBarrier(1, &DestCopyToPresent);
+        D3D12Framework->CommandList->ResourceBarrier(2, (D3D12_RESOURCE_BARRIER[2]){SrcCopyToUav, DestCopyToPresent});
     }
-    { //render imgui
+    
+    if(RenderImgui) {
         D3D12_RESOURCE_BARRIER PresentToRtv = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
         D3D12_RESOURCE_BARRIER RtvToPresent = D3D12Transition(D3D12Framework->RtvResource[BackBufferIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     
         D3D12Framework->CommandList->ResourceBarrier(1, &PresentToRtv);
-
         ImGui::Render();
         ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Framework->CommandList);
-    
-        D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);    
+        D3D12Framework->CommandList->ResourceBarrier(1, &RtvToPresent);
     }
     
     D3D12Framework->CommandList->Close();

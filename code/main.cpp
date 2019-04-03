@@ -115,18 +115,17 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
             DispatchMessage(&Message);
         }
 
-        ImGui_ImplDX12_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-
         if(GlobalMenuOpen) {
+            ImGui_ImplDX12_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();      
             BuildUI(&GlobalUiState, &UserShaderInput);
         }
 
         upload_constants ComputeShaderConstants = {};
         FillUploadConstants(&ComputeShaderConstants, &UserShaderInput, &Camera, iTime, int2(WindowWidth, WindowHeight));
         
-        Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants);
+        Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants, GlobalMenuOpen);
 
         UpdateCamera(&Camera, &GlobalInputState);        
 
