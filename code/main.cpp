@@ -102,8 +102,8 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
 
     InitUI(WindowHandle, &D3D12Framework);
 
-    user_shader_input UserShaderInput = {};
-    DefaultUserShaderInput(&UserShaderInput);
+    upload_constants ComputeShaderConstants = {};       
+    DefaultUserShaderInput(&ComputeShaderConstants);
     
     u32 iTime = 0;    
     GlobalIsRunning = true;
@@ -119,11 +119,10 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
             ImGui_ImplDX12_NewFrame();
             ImGui_ImplWin32_NewFrame();
             ImGui::NewFrame();      
-            BuildUI(&GlobalUiState, &UserShaderInput);
+            BuildUI(&GlobalUiState, &ComputeShaderConstants);
         }
 
-        upload_constants ComputeShaderConstants = {};
-        FillUploadConstants(&ComputeShaderConstants, &UserShaderInput, &Camera, iTime, int2(WindowWidth, WindowHeight));
+        FillUploadConstants(&ComputeShaderConstants, &Camera, iTime, int2(WindowWidth, WindowHeight));
         
         Render(&D3D12Framework, WindowWidth, WindowHeight, &ComputeShaderConstants, GlobalMenuOpen);
 

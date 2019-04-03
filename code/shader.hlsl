@@ -3,7 +3,19 @@ RWTexture2D<float4> Output : register(u0);
 
 cbuffer Constants : register(b0) {
     float3 Color;
+    float Subsurface;
+    float Metalic;
+    float Specular;
+    float SpecularTint;
+    float Roughness;
+    float Anistropic;
+    float Sheen;
+    float SheenTint;
+    float Clearcoat;
+    float ClearcoatGloss;
     float AoDegree;
+    float2 pack0;
+    
     float3 CameraPos;
     uint pack1;
     float3 CameraDir;
@@ -17,6 +29,7 @@ cbuffer Constants : register(b0) {
     int2 iResolution;
 };
 
+#define PI 3.14159
 #define MAX_STEPS 256
 #define MAX_DIST 5.0
 //#define MIN_SURFACE_DIST min(0.0005 * length(CameraPos), 0.002)
@@ -109,6 +122,21 @@ RayMarch(float3 Ro, float3 Rd) {
     return Result;
 }
 
+float3
+DisneyBRDF(float3 N, float3 L, float3 V) {
+    float3 OutColor = float3(0.0, 0.0, 0.0);
+    float3 Diffuse = Color / PI;
+
+    float3 H = (L + V) / (length(L + V));
+    float IndexFractal = 1.33;
+    float IndexAir = 1.00029;
+    float F0 = pow((IndexFractal - IndexAir) / (IndexFractal + IndexAir), 2.0);
+    float SpecularF = F0 + (1.0 - F0) * pow((1.0 - dot(L, H)), 5.0);
+    float SpecularG = pow(0.5 + Roughness / 2.0, 2.0);
+    OutColor = Diffuse + SpecularF * SpecularG * (1.0 / (4.0 * dot(N, L) * dot(N, V)));
+    return OutColor;
+}
+
 [numthreads(16, 16, 1)]
 void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     float2 uv = (thread_id - .5 * iResolution.xy) / iResolution.y;
@@ -123,16 +151,15 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     if(Collision.Dist < 0.0) {
         float3 BottomColor = float3(0.0, 0.0, 0.9);
         float3 TopColor = float3(0.8, 0.8, 1.0);
-        ColorOut.xyz = lerp(BottomColor, TopColor, (Rd.y + 1.0) / 2.0);
+        ColorOut = lerp(BottomColor, TopColor, (Rd.y + 1.0) / 2.0);
     } else {
         float3 LightDir = normalize(float3(-1.0, -0.5, -0.3));
         LightDir = normalize(CameraDir);
-        float3 Diffuse = Color * max(0.0, dot(Collision.Normal, -LightDir));
         float AO = 1.0;
         if(AoDegree > 0) {
             AO = pow(1.0 - (Collision.Iter / MAX_ITERATIONS), AoDegree);
         }
-        ColorOut.xyz = Diffuse * AO;
+        ColorOut = DisneyBRDF(Collision.Normal, -LightDir, -CameraDir) * AO;
     }
 
     ColorOut.xyz = ColorOut.xyz / (1.0 + ColorOut.xyz);

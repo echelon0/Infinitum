@@ -20,33 +20,45 @@ InitUI(HWND WindowHandle, d3d12_framework *D3D12Framework) {
 }
 
 void
-BuildUI(ui_state *UiState, user_shader_input *ShaderInput) {
+BuildUI(ui_state *UiState, upload_constants *UploadConstants) {
     ImGui::Begin("Menu", 0, ImGuiWindowFlags_AlwaysAutoResize);
 
+    ImGui::Text("Ambient Occlusion:");
+    ImGui::SameLine();
+    if(UiState->AoDegreeOpen && ImGui::Button("Toggle Off")) {
+        UiState->AoDegreeOpen = 0;
+        UiState->PrevAoDegree = UploadConstants->AoDegree;
+        UploadConstants->AoDegree = 0.0f;
+    } else if(!UiState->AoDegreeOpen && ImGui::Button("Toggle On")) {
+        UiState->AoDegreeOpen = 1;
+        UploadConstants->AoDegree = UiState->PrevAoDegree;
+    }    
+    if(UiState->AoDegreeOpen) {
+        ImGui::SliderFloat("Degree", &UploadConstants->AoDegree, 0.0f, 5.0f, "%.1f");
+    }
+
+    ImGui::Text("BRDF terms");
     if(UiState->ColorPickerOpen) {
-        float col[3] = {ShaderInput->Color.x, ShaderInput->Color.y, ShaderInput->Color.z};
+        float col[3] = {UploadConstants->Color.x, UploadConstants->Color.y, UploadConstants->Color.z};
         ImGui::ColorPicker3("Color", col);
-        ShaderInput->Color = float3(col[0], col[1], col[2]);
+        UploadConstants->Color = float3(col[0], col[1], col[2]);
         if(ImGui::Button("Done")) {
             UiState->ColorPickerOpen = 0;           
         }
     } else if(ImGui::Button("Pick Color")) {
         UiState->ColorPickerOpen = 1;
     }
-
-    ImGui::Text("Ambient Occlusion:");
-    ImGui::SameLine();
-    if(UiState->AoDegreeOpen && ImGui::Button("Toggle Off")) {
-        UiState->AoDegreeOpen = 0;
-        UiState->PrevAoDegree = ShaderInput->AoDegree;
-        ShaderInput->AoDegree = 0.0f;
-    } else if(!UiState->AoDegreeOpen && ImGui::Button("Toggle On")) {
-        UiState->AoDegreeOpen = 1;
-        ShaderInput->AoDegree = UiState->PrevAoDegree;
-    }    
-    if(UiState->AoDegreeOpen) {
-        ImGui::SliderFloat("Degree", &ShaderInput->AoDegree, 0.0f, 5.0f, "%.1f");
-    }
+    
+    ImGui::SliderFloat("Subsurface", &UploadConstants->Subsurface, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Metalic", &UploadConstants->Metalic, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Specular", &UploadConstants->Specular, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Specular Tint", &UploadConstants->SpecularTint, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Roughness", &UploadConstants->Roughness, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Anistropic", &UploadConstants->Anistropic, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Sheen", &UploadConstants->Sheen, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Sheen Tint", &UploadConstants->SheenTint, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Clearcoat", &UploadConstants->Clearcoat, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Clearcoat Gloss", &UploadConstants->ClearcoatGloss, 0.0f, 1.0f, "%.2f");
     
     ImGui::End();
 }

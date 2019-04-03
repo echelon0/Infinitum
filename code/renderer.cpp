@@ -22,14 +22,21 @@ struct d3d12_framework {
     HANDLE FenceEvent;
 };
 
-struct user_shader_input {
-    float3 Color;
-    float AoDegree;
-};
-
 struct upload_constants {
     float3 Color;
+    float Subsurface;
+    float Metalic;
+    float Specular;
+    float SpecularTint;
+    float Roughness;
+    float Anistropic;
+    float Sheen;
+    float SheenTint;
+    float Clearcoat;
+    float ClearcoatGloss;
     float AoDegree;
+    float2 pack0;
+    
     float3 CameraPos;
     u32 pack1;
     float3 CameraDir;
@@ -44,19 +51,27 @@ struct upload_constants {
 };
 
 void
-DefaultUserShaderInput(user_shader_input *ShaderInput) {
-    ShaderInput->Color = float3(1.0f, 1.0f, 1.0f);
-    ShaderInput->AoDegree = 0.0f;
+DefaultUserShaderInput(upload_constants *UploadConstants) {
+    UploadConstants->Color = float3(1.0f, 1.0f, 1.0f);
+    UploadConstants->Subsurface = 0.0f;
+    UploadConstants->Metalic = 0.0f;
+    UploadConstants->Specular = 0.5f;
+    UploadConstants->SpecularTint = 0.0f;
+    UploadConstants->Roughness = 0.5f;
+    UploadConstants->Anistropic = 0.0f;
+    UploadConstants->Sheen = 0.0f;
+    UploadConstants->SheenTint = 0.5f;
+    UploadConstants->Clearcoat = 0.0f;
+    UploadConstants->ClearcoatGloss = 1.0f;    
+    UploadConstants->AoDegree = 0.0f;
 }
 
 void
 FillUploadConstants(upload_constants *UploadConstants,
-                    user_shader_input *ShaderInput,
                     camera *Camera,
                     u32 iTime,
                     int2 iResolution) {
-        UploadConstants->Color = ShaderInput->Color;
-        UploadConstants->AoDegree = ShaderInput->AoDegree;
+        
         UploadConstants->CameraPos = Camera->Pos;
         UploadConstants->CameraDir = Camera->Frame.Dir;
         UploadConstants->CameraRight = Camera->Frame.Right;
