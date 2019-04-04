@@ -24,18 +24,11 @@ struct d3d12_framework {
 
 struct upload_constants {
     float3 Color;
-    float Subsurface;
-    float Metalic;
     float Specular;
-    float SpecularTint;
     float Roughness;
-    float Anistropic;
-    float Sheen;
-    float SheenTint;
-    float Clearcoat;
-    float ClearcoatGloss;
     float AoDegree;
-    float2 pack0;
+    u32 AA;
+    u32 pack0;
     
     float3 CameraPos;
     u32 pack1;
@@ -52,18 +45,11 @@ struct upload_constants {
 
 void
 DefaultUserShaderInput(upload_constants *UploadConstants) {
-    UploadConstants->Color = float3(1.0f, 1.0f, 1.0f);
-    UploadConstants->Subsurface = 0.0f;
-    UploadConstants->Metalic = 0.0f;
+    UploadConstants->Color = float3(120 / 255.0f, 180 / 255.0f, 1.0f);
     UploadConstants->Specular = 0.5f;
-    UploadConstants->SpecularTint = 0.0f;
     UploadConstants->Roughness = 0.5f;
-    UploadConstants->Anistropic = 0.0f;
-    UploadConstants->Sheen = 0.0f;
-    UploadConstants->SheenTint = 0.5f;
-    UploadConstants->Clearcoat = 0.0f;
-    UploadConstants->ClearcoatGloss = 1.0f;    
-    UploadConstants->AoDegree = 0.0f;
+    UploadConstants->AoDegree = 3.0f;
+    UploadConstants->AA = 0;
 }
 
 void

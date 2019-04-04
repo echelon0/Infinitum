@@ -37,7 +37,15 @@ BuildUI(ui_state *UiState, upload_constants *UploadConstants) {
         ImGui::SliderFloat("Degree", &UploadConstants->AoDegree, 0.0f, 5.0f, "%.1f");
     }
 
-    ImGui::Text("BRDF terms");
+    ImGui::Text("Anti Aliasing:");
+    ImGui::SameLine();
+    if(UploadConstants->AA && ImGui::Button("Toggle Off")) {
+        UploadConstants->AA = 0;
+    } else if(!UploadConstants->AA && ImGui::Button("Toggle On")) {
+        UploadConstants->AA = 1;        
+    }
+
+    ImGui::Text("BRDF terms:");
     if(UiState->ColorPickerOpen) {
         float col[3] = {UploadConstants->Color.x, UploadConstants->Color.y, UploadConstants->Color.z};
         ImGui::ColorPicker3("Color", col);
@@ -45,20 +53,12 @@ BuildUI(ui_state *UiState, upload_constants *UploadConstants) {
         if(ImGui::Button("Done")) {
             UiState->ColorPickerOpen = 0;           
         }
-    } else if(ImGui::Button("Pick Color")) {
+    } else if(ImGui::Button("Color")) {
         UiState->ColorPickerOpen = 1;
     }
     
-    ImGui::SliderFloat("Subsurface", &UploadConstants->Subsurface, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Metalic", &UploadConstants->Metalic, 0.0f, 1.0f, "%.2f");
     ImGui::SliderFloat("Specular", &UploadConstants->Specular, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Specular Tint", &UploadConstants->SpecularTint, 0.0f, 1.0f, "%.2f");
     ImGui::SliderFloat("Roughness", &UploadConstants->Roughness, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Anistropic", &UploadConstants->Anistropic, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Sheen", &UploadConstants->Sheen, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Sheen Tint", &UploadConstants->SheenTint, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Clearcoat", &UploadConstants->Clearcoat, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Clearcoat Gloss", &UploadConstants->ClearcoatGloss, 0.0f, 1.0f, "%.2f");
     
     ImGui::End();
 }

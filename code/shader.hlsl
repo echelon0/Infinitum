@@ -3,18 +3,11 @@ RWTexture2D<float4> Output : register(u0);
 
 cbuffer Constants : register(b0) {
     float3 Color;
-    float Subsurface;
-    float Metalic;
     float Specular;
-    float SpecularTint;
     float Roughness;
-    float Anistropic;
-    float Sheen;
-    float SheenTint;
-    float Clearcoat;
-    float ClearcoatGloss;
     float AoDegree;
-    float2 pack0;
+    uint AA;
+    uint pack0;
     
     float3 CameraPos;
     uint pack1;
@@ -32,8 +25,7 @@ cbuffer Constants : register(b0) {
 #define PI 3.14159
 #define MAX_STEPS 256
 #define MAX_DIST 5.0
-//#define MIN_SURFACE_DIST min(0.0005 * length(CameraPos), 0.002)
-#define MIN_SURFACE_DIST min(0.0005, DistanceEstimator(CameraPos).Dist)
+#define MIN_SURFACE_DIST min(DistanceEstimator(CameraPos).Dist*0.005, 0.0005)
 
 #define MAX_ITERATIONS 15.0
 #define DIVERGENCE 1.5
@@ -123,29 +115,27 @@ RayMarch(float3 Ro, float3 Rd) {
 }
 
 float3
-DisneyBRDF(float3 N, float3 L, float3 V) {
+BRDF(float3 N, float3 L, float3 V) {
     float3 OutColor = float3(0.0, 0.0, 0.0);
     float3 Diffuse = Color / PI;
-
     float3 H = (L + V) / (length(L + V));
-    float IndexFractal = 1.33;
+
+    float Roughness2 = Roughness * Roughness;
+    float SpecularD = (Roughness2) / (PI * pow((dot(N, H) * dot(N, H)) * (Roughness2 - 1.0) + 1.0, 2.0));
+
+    float IndexFractal = 2.417;
     float IndexAir = 1.00029;
     float F0 = pow((IndexFractal - IndexAir) / (IndexFractal + IndexAir), 2.0);
     float SpecularF = F0 + (1.0 - F0) * pow((1.0 - dot(L, H)), 5.0);
+    
     float SpecularG = pow(0.5 + Roughness / 2.0, 2.0);
-    OutColor = Diffuse + SpecularF * SpecularG * (1.0 / (4.0 * dot(N, L) * dot(N, V)));
+    
+    OutColor = (1.0 - Specular) * Diffuse + Specular * Color * SpecularD * SpecularF * SpecularG * (1.0 / (4.0 * dot(N, L) * dot(N, V)));
     return OutColor;
 }
 
-[numthreads(16, 16, 1)]
-void CSMain(uint3 thread_id : SV_DispatchThreadID) {
-    float2 uv = (thread_id - .5 * iResolution.xy) / iResolution.y;
-    uv.y *= -1.0;            
-
-    float3 CamPos = CameraPos;
-    float3 Ro = CamPos.xyz;
-    float3 Rd = normalize(CameraDir * CameraLensDist + CameraRight * uv.x + CameraUp * uv.y);
-
+float3
+ComputeColor(float3 Ro, float3 Rd) {
     float3 ColorOut = float3(0.0, 0.0, 0.0);
     collision_info Collision = RayMarch(Ro, Rd);
     if(Collision.Dist < 0.0) {
@@ -159,9 +149,27 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
         if(AoDegree > 0) {
             AO = pow(1.0 - (Collision.Iter / MAX_ITERATIONS), AoDegree);
         }
-        ColorOut = DisneyBRDF(Collision.Normal, -LightDir, -CameraDir) * AO;
+        ColorOut = BRDF(Collision.Normal, -LightDir, -CameraDir) * AO;
     }
+    return ColorOut;
+}
 
+[numthreads(16, 16, 1)]
+void CSMain(uint3 thread_id : SV_DispatchThreadID) {
+    float2 uv = (thread_id - 0.5 * iResolution.xy) / iResolution.y;
+    uv.y *= -1.0;            
+
+    float3 CamPos = CameraPos;
+    float3 Ro = CamPos.xyz;
+    float3 Rd = normalize(CameraDir * CameraLensDist + CameraRight * uv.x + CameraUp * uv.y);
+
+    float Epsilon = 0.001f;
+    float3 ColorL = ComputeColor(Ro, Rd + float3(-Epsilon, 0.0, 0.0));
+    float3 ColorR = ComputeColor(Ro, Rd + float3(Epsilon, 0.0, 0.0));
+    float3 ColorU = ComputeColor(Ro, Rd + float3(0.0, Epsilon, 0.0));
+    float3 ColorD = ComputeColor(Ro, Rd + float3(0.0, -Epsilon, 0.0));
+    
+    float3 ColorOut = (ColorL + ColorR + ColorU + ColorD) * 0.25;
     ColorOut.xyz = ColorOut.xyz / (1.0 + ColorOut.xyz);
     ColorOut.xyz = pow(ColorOut.xyz, 1.0 / 2.2);
 
