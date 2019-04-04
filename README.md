@@ -4,7 +4,7 @@ A 3D Fractal Explorer
 ## Features
 - Full camera control.<br>
 - Physically based shading (microfacet model).<br>
-- Ambient occlusion and anti-aliasing.<br?
+- Ambient occlusion and anti-aliasing.<br>
 
 ## Controls
 - ESC key closes the application.<br>
