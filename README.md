@@ -1,12 +1,12 @@
 # Infinitum
 A 3D Fractal Explorer
 
-##Features
+## Features
 - Full camera control.<br>
 - Physically based shading (microfacet model).<br>
 - Ambient occlusion and anti-aliasing.<br?
 
-##Controls
+## Controls
 - ESC key closes the application.<br>
 - Keys W, A, S, D used to move forward, left, backward, and right respectively.<br>
 - The <u>space</u> key moves the camera up and the <u>ctrl</u> key moves the camera down.<br>
