@@ -7,7 +7,7 @@ cbuffer Constants : register(b0) {
     float Roughness;
     float AoDegree;
     uint AA;
-    uint pack0;
+    float MinSurfaceDist;
     
     float3 CameraPos;
     uint pack1;
@@ -25,7 +25,7 @@ cbuffer Constants : register(b0) {
 #define PI 3.14159
 #define MAX_STEPS 256
 #define MAX_DIST 5.0
-#define MIN_SURFACE_DIST min(DistanceEstimator(CameraPos).Dist*0.005, 0.0005)
+#define MIN_SURFACE_DIST min(DistanceEstimator(CameraPos).Dist*0.005, MinSurfaceDist)
 
 #define MAX_ITERATIONS 15.0
 #define DIVERGENCE 1.5
@@ -121,16 +121,17 @@ BRDF(float3 N, float3 L, float3 V) {
     float3 H = (L + V) / (length(L + V));
 
     float Roughness2 = Roughness * Roughness;
-    float SpecularD = (Roughness2) / (PI * pow((dot(N, H) * dot(N, H)) * (Roughness2 - 1.0) + 1.0, 2.0));
+    float NdotH = dot(N, H);
+    float SpecularD = (Roughness2) / (PI * (NdotH * NdotH * (Roughness2 - 1.0) + 1.0) * (NdotH * NdotH * (Roughness2 - 1.0) + 1.0));
 
-    float IndexFractal = 2.417;
+    float IndexFractal = 1.417;
     float IndexAir = 1.00029;
     float F0 = pow((IndexFractal - IndexAir) / (IndexFractal + IndexAir), 2.0);
     float SpecularF = F0 + (1.0 - F0) * pow((1.0 - dot(L, H)), 5.0);
     
     float SpecularG = pow(0.5 + Roughness / 2.0, 2.0);
     
-    OutColor = (1.0 - Specular) * Diffuse + Specular * Color * SpecularD * SpecularF * SpecularG * (1.0 / (4.0 * dot(N, L) * dot(N, V)));
+    OutColor = (1.0 - Specular) * Diffuse + Specular * SpecularD * SpecularF * SpecularG * (1.0 / (4.0 * dot(N, L) * dot(N, V)));
     return OutColor;
 }
 
@@ -162,16 +163,21 @@ void CSMain(uint3 thread_id : SV_DispatchThreadID) {
     float3 CamPos = CameraPos;
     float3 Ro = CamPos.xyz;
     float3 Rd = normalize(CameraDir * CameraLensDist + CameraRight * uv.x + CameraUp * uv.y);
-
-    float Epsilon = 0.001f;
-    float3 ColorL = ComputeColor(Ro, Rd + float3(-Epsilon, 0.0, 0.0));
-    float3 ColorR = ComputeColor(Ro, Rd + float3(Epsilon, 0.0, 0.0));
-    float3 ColorU = ComputeColor(Ro, Rd + float3(0.0, Epsilon, 0.0));
-    float3 ColorD = ComputeColor(Ro, Rd + float3(0.0, -Epsilon, 0.0));
     
-    float3 ColorOut = (ColorL + ColorR + ColorU + ColorD) * 0.25;
+    float3 ColorOut = 0;
+    if(AA) {
+        float Epsilon = 0.001f;
+        float3 ColorL = ComputeColor(Ro, Rd + float3(-Epsilon, 0.0, 0.0));
+        float3 ColorR = ComputeColor(Ro, Rd + float3(Epsilon, 0.0, 0.0));
+        float3 ColorU = ComputeColor(Ro, Rd + float3(0.0, Epsilon, 0.0));
+        float3 ColorD = ComputeColor(Ro, Rd + float3(0.0, -Epsilon, 0.0));
+    
+        ColorOut = (ColorL + ColorR + ColorU + ColorD) * 0.25;
+    } else {
+        ColorOut = ComputeColor(Ro, Rd);
+    }
     ColorOut.xyz = ColorOut.xyz / (1.0 + ColorOut.xyz);
-    ColorOut.xyz = pow(ColorOut.xyz, 1.0 / 2.2);
+    ColorOut.xyz = sqrt(ColorOut.xyz);
 
     Output[thread_id.xy] = float4(ColorOut.xyz, 1.0);
 }

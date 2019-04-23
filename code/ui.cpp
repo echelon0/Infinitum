@@ -1,7 +1,7 @@
 
 struct ui_state {
     u32 ColorPickerOpen;
-    u32 AoDegreeOpen;
+    u32 AoDegreeClosed;
     float PrevAoDegree;
 };
 
@@ -25,15 +25,15 @@ BuildUI(ui_state *UiState, upload_constants *UploadConstants) {
 
     ImGui::Text("Ambient Occlusion:");
     ImGui::SameLine();
-    if(UiState->AoDegreeOpen && ImGui::Button("Toggle Off")) {
-        UiState->AoDegreeOpen = 0;
+    if(!UiState->AoDegreeClosed && ImGui::Button("Toggle Off")) {
+        UiState->AoDegreeClosed = 1;
         UiState->PrevAoDegree = UploadConstants->AoDegree;
         UploadConstants->AoDegree = 0.0f;
-    } else if(!UiState->AoDegreeOpen && ImGui::Button("Toggle On")) {
-        UiState->AoDegreeOpen = 1;
+    } else if(UiState->AoDegreeClosed && ImGui::Button("Toggle On")) {
+        UiState->AoDegreeClosed = 0;
         UploadConstants->AoDegree = UiState->PrevAoDegree;
     }    
-    if(UiState->AoDegreeOpen) {
+    if(!UiState->AoDegreeClosed) {
         ImGui::SliderFloat("Degree", &UploadConstants->AoDegree, 0.0f, 5.0f, "%.1f");
     }
 
@@ -58,7 +58,9 @@ BuildUI(ui_state *UiState, upload_constants *UploadConstants) {
     }
     
     ImGui::SliderFloat("Specular", &UploadConstants->Specular, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Roughness", &UploadConstants->Roughness, 0.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Roughness", &UploadConstants->Roughness, 0.5f, 1.0f, "%.2f");
+    
+    ImGui::SliderFloat("Detail", &UploadConstants->MinSurfaceDist, 0.000001f, 0.0035f, "%.6f");
     
     ImGui::End();
 }

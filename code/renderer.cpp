@@ -28,7 +28,7 @@ struct upload_constants {
     float Roughness;
     float AoDegree;
     u32 AA;
-    u32 pack0;
+    float MinSurfaceDist;
     
     float3 CameraPos;
     u32 pack1;
@@ -45,11 +45,12 @@ struct upload_constants {
 
 void
 DefaultUserShaderInput(upload_constants *UploadConstants) {
-    UploadConstants->Color = float3(120 / 255.0f, 180 / 255.0f, 1.0f);
-    UploadConstants->Specular = 0.5f;
+    UploadConstants->Color = float3(230 / 255.0f, 230 / 255.0f, 1.0f);
+    UploadConstants->Specular = 0.0f;
     UploadConstants->Roughness = 0.5f;
-    UploadConstants->AoDegree = 3.0f;
+    UploadConstants->AoDegree = 5.0f;
     UploadConstants->AA = 0;
+    UploadConstants->MinSurfaceDist = 0.001f;
 }
 
 void
