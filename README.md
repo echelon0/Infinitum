@@ -6,6 +6,10 @@ A 3D Fractal Explorer
 - Physically based shading (microfacet model).<br>
 - Ambient occlusion and anti-aliasing.<br>
 
+## Gallery
+Section of a mandelbulb
+![mandelbulb-1](https://user-images.githubusercontent.com/35866844/56600349-52897b00-65ad-11e9-890b-1c2aefa9a4b3.PNG)
+
 ## Controls
 - ESC key closes the application.<br>
 - Keys W, A, S, D used to move forward, left, backward, and right respectively.<br>
